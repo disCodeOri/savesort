@@ -172,7 +172,7 @@ describe("GitHub OAuth routes", () => {
     const response = await callbackGet(
       request(
         "http://localhost:3000/api/github/callback?code=code-1&state=wrong",
-        "savesort_github_state=expected",
+        "savesort_github_state=expected; savesort_github_pkce=verifier-1",
       ),
     );
 
