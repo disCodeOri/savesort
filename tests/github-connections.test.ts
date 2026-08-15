@@ -111,10 +111,19 @@ class QueryMock implements PromiseLike<DatabaseResponse> {
 class AdminClientMock {
   calls: QueryCall[] = [];
   failures = new Map<string, Error>();
+  rpcCalls: Array<{ name: string; values: Record<string, unknown> }> = [];
+  rpcFailure: Error | null = null;
+  rpcResponse: DatabaseResponse = { data: null, error: null };
   responses = new Map<string, DatabaseResponse | DatabaseResponse[]>();
 
   from(table: string) {
     return new QueryMock(this, table);
+  }
+
+  rpc(name: string, values: Record<string, unknown>) {
+    this.rpcCalls.push({ name, values });
+    if (this.rpcFailure) return Promise.reject(this.rpcFailure);
+    return Promise.resolve(this.rpcResponse);
   }
 
   responseFor(call: QueryCall): DatabaseResponse {
@@ -179,83 +188,25 @@ describe("GitHub connections", () => {
       },
     );
 
-    const connection = admin.calls.find(
-      (call) =>
-        call.operation === "upsert" && call.table === "github_connections",
-    );
-    const secret = admin.calls.find(
-      (call) =>
-        call.operation === "upsert" &&
-        call.table === "github_connection_secrets",
-    );
+    const rpc = admin.rpcCalls[0];
 
-    expect(connection?.values).toMatchObject({
-      user_id: userId,
-      github_user_id: 1,
-      github_login: "octocat",
-      connection_status: "connected",
-      sync_status: "idle",
+    expect(rpc).toMatchObject({
+      name: "save_github_connection",
+      values: {
+        p_user_id: userId,
+        p_github_user_id: 1,
+        p_github_login: "octocat",
+        p_access_token_ciphertext: "encrypted:ghu_access",
+        p_refresh_token_ciphertext: "encrypted:ghr_refresh",
+      },
     });
-    expect(secret?.values).toMatchObject({
-      user_id: userId,
-      access_token_ciphertext: "encrypted:ghu_access",
-      refresh_token_ciphertext: "encrypted:ghr_refresh",
-    });
-    expect(secret?.values?.access_token_expires_at).toEqual(expect.any(String));
+    expect(rpc?.values.p_access_token_expires_at).toEqual(expect.any(String));
     expect(
-      Date.parse(secret?.values?.access_token_expires_at as string),
+      Date.parse(rpc?.values.p_access_token_expires_at as string),
     ).toBeGreaterThanOrEqual(beforeSave + 3_599_000);
     expect(mocks.encryptSecret).toHaveBeenCalledWith("ghu_access");
     expect(mocks.encryptSecret).toHaveBeenCalledWith("ghr_refresh");
-    expect(
-      admin.calls.every((call) =>
-        call.filters.some(
-          ([column, value]) => column === "user_id" && value === userId,
-        ),
-      ),
-    ).toBe(true);
-  });
-
-  it("stages credentials before publishing connection metadata", async () => {
-    await saveGitHubConnection(
-      userId,
-      { id: 1, login: "octocat", avatar_url: "https://avatar.test" },
-      {
-        access_token: "ghu_access",
-        refresh_token: "ghr_refresh",
-        expires_in: 3_600,
-        refresh_token_expires_in: 7_200,
-      },
-    );
-
-    expect(
-      admin.calls
-        .filter((call) => call.operation === "upsert")
-        .map((call) => call.table),
-    ).toEqual(["github_connection_secrets", "github_connections"]);
-  });
-
-  it("removes staged credentials when connection metadata cannot be saved", async () => {
-    admin.responses.set("github_connections:upsert", {
-      data: null,
-      error: { message: "metadata write failed" },
-    });
-
-    await expect(
-      saveGitHubConnection(
-        userId,
-        { id: 1, login: "octocat", avatar_url: "https://avatar.test" },
-        { access_token: "ghu_access", expires_in: 3_600 },
-      ),
-    ).rejects.toThrow("GitHub connection could not be saved.");
-
-    expect(
-      admin.calls.map((call) => `${call.operation}:${call.table}`),
-    ).toEqual([
-      "upsert:github_connection_secrets",
-      "upsert:github_connections",
-      "delete:github_connection_secrets",
-    ]);
+    expect(admin.calls).toHaveLength(0);
   });
 
   it("returns a public connection status without credential fields", async () => {
@@ -343,10 +294,10 @@ describe("GitHub connections", () => {
   });
 
   it("maps database save failures to a safe error", async () => {
-    admin.responses.set("github_connections:upsert", {
+    admin.rpcResponse = {
       data: null,
       error: { message: "relation github_connection_secrets does not exist" },
-    });
+    };
 
     await expect(
       saveGitHubConnection(
@@ -355,6 +306,20 @@ describe("GitHub connections", () => {
         { access_token: "ghu_access", expires_in: 3_600 },
       ),
     ).rejects.toThrow("GitHub connection could not be saved.");
+    expect(admin.calls).toHaveLength(0);
+  });
+
+  it("maps rejected atomic save calls to a safe error", async () => {
+    admin.rpcFailure = new Error("connection reset by peer");
+
+    await expect(
+      saveGitHubConnection(
+        userId,
+        { id: 1, login: "octocat", avatar_url: "https://avatar.test" },
+        { access_token: "ghu_access", expires_in: 3_600 },
+      ),
+    ).rejects.toThrow("GitHub connection could not be saved.");
+    expect(admin.calls).toHaveLength(0);
   });
 
   it("marks the connection for reconnection when refresh is unauthorized", async () => {

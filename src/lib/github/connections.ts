@@ -82,20 +82,6 @@ function hasCompleteRotation(token: GitHubOAuthToken): boolean {
   );
 }
 
-async function removeStagedSecret(
-  userId: string,
-  client: ReturnType<typeof createAdminClient>,
-): Promise<void> {
-  try {
-    await client
-      .from("github_connection_secrets")
-      .delete()
-      .eq("user_id", userId);
-  } catch {
-    // The connection write already failed; avoid leaking this cleanup failure.
-  }
-}
-
 export async function saveGitHubConnection(
   userId: string,
   user: GitHubAuthenticatedUser,
@@ -109,39 +95,21 @@ export async function saveGitHubConnection(
   const client = createAdminClient();
 
   try {
-    const secret = await client
-      .from("github_connection_secrets")
-      .upsert({
-        user_id: userId,
-        access_token_ciphertext: accessTokenCiphertext,
-        refresh_token_ciphertext: refreshTokenCiphertext,
-        access_token_expires_at: expiresAt(token.expires_in, now),
-        refresh_token_expires_at: expiresAt(
-          token.refresh_token_expires_in,
-          now,
-        ),
-      })
-      .eq("user_id", userId);
-    if (secret.error) throw saveError();
+    const result = await client.rpc("save_github_connection", {
+      p_user_id: userId,
+      p_github_user_id: user.id,
+      p_github_login: user.login,
+      p_github_avatar_url: user.avatar_url,
+      p_access_token_ciphertext: accessTokenCiphertext,
+      p_refresh_token_ciphertext: refreshTokenCiphertext,
+      p_access_token_expires_at: expiresAt(token.expires_in, now),
+      p_refresh_token_expires_at: expiresAt(
+        token.refresh_token_expires_in,
+        now,
+      ),
+    });
+    if (result.error) throw saveError();
   } catch {
-    throw saveError();
-  }
-
-  try {
-    const connection = await client
-      .from("github_connections")
-      .upsert({
-        user_id: userId,
-        github_user_id: user.id,
-        github_login: user.login,
-        github_avatar_url: user.avatar_url,
-        connection_status: "connected",
-        sync_status: "idle",
-      })
-      .eq("user_id", userId);
-    if (connection.error) throw saveError();
-  } catch {
-    await removeStagedSecret(userId, client);
     throw saveError();
   }
 }

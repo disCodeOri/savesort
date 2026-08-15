@@ -11,6 +11,9 @@ begin
   if to_regprocedure('public.begin_github_sync(uuid,uuid)') is null then
     raise exception 'begin_github_sync(uuid, uuid) is missing';
   end if;
+  if to_regprocedure('public.save_github_connection(uuid,bigint,text,text,text,text,timestamptz,timestamptz)') is null then
+    raise exception 'save_github_connection is missing';
+  end if;
 
   if not (
     select count(*) = 2 and bool_and(relrowsecurity)
@@ -130,6 +133,25 @@ begin
       and with_check is null
   ) then
     raise exception 'github_connections SELECT policy must enforce ownership';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_proc
+    where oid = 'public.save_github_connection(uuid,bigint,text,text,text,text,timestamptz,timestamptz)'::regprocedure
+      and prosecdef
+      and proconfig @> array['search_path=""']
+      and not has_function_privilege('anon', oid, 'execute')
+      and not has_function_privilege('authenticated', oid, 'execute')
+      and has_function_privilege('service_role', oid, 'execute')
+      and not exists (
+        select 1
+        from aclexplode(coalesce(proacl, acldefault('f', proowner))) as acl
+        where acl.privilege_type = 'EXECUTE'
+          and acl.grantee not in (proowner, 'service_role'::regrole)
+      )
+  ) then
+    raise exception 'save_github_connection must be service-role-only SECURITY DEFINER with an empty search_path';
   end if;
 
   if not exists (
