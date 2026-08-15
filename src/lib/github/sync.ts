@@ -20,6 +20,7 @@ const SAVED_ITEM_COLUMNS =
   "user_id, url, normalized_url, source, title, description, notes, content, author, thumbnail_url, tags, metadata, searchable_text, embedding, indexing_status, indexing_error, updated_at";
 const EMBEDDING_CONCURRENCY = 4;
 const EXISTING_ITEM_CHUNK_SIZE = 25;
+const PAGE_HEARTBEAT_INTERVAL_MS = 60_000;
 const INDEXING_ERROR = "Semantic indexing is temporarily unavailable.";
 const RECONNECT_ERROR = "GitHub access expired. Reconnect to resume syncing.";
 const UNKNOWN_SYNC_ERROR = "GitHub sync failed. Try again later.";
@@ -180,6 +181,7 @@ async function failPageLease(
   client: AdminClient,
   userId: string,
   syncId: string,
+  page: number,
   leaseId: string | null,
   error: string,
   reconnectRequired: boolean,
@@ -187,6 +189,7 @@ async function failPageLease(
   const result = await client.rpc("fail_github_sync_page", {
     p_user_id: userId,
     p_sync_id: syncId,
+    p_page: page,
     p_lease_id: leaseId,
     p_error: error,
     p_reconnect_required: reconnectRequired,
@@ -199,6 +202,7 @@ async function cleanUpFailure(
   client: AdminClient,
   userId: string,
   syncId: string,
+  page: number,
   leaseId: string | null,
   error: string,
   reconnectRequired = false,
@@ -208,6 +212,7 @@ async function cleanUpFailure(
       client,
       userId,
       syncId,
+      page,
       leaseId,
       error,
       reconnectRequired,
@@ -217,10 +222,67 @@ async function cleanUpFailure(
   }
 }
 
+async function heartbeatPageLease(
+  client: AdminClient,
+  userId: string,
+  syncId: string,
+  page: number,
+  leaseId: string,
+): Promise<void> {
+  const result = await client.rpc("heartbeat_github_sync_page", {
+    p_user_id: userId,
+    p_sync_id: syncId,
+    p_page: page,
+    p_lease_id: leaseId,
+  });
+  if (result.error) throw result.error;
+  if (result.data !== true) throw new GitHubSyncError("conflict");
+}
+
+function startPageHeartbeat(
+  client: AdminClient,
+  userId: string,
+  syncId: string,
+  page: number,
+  leaseId: string,
+) {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let running: Promise<void> | null = null;
+  let failure: unknown = null;
+
+  const schedule = () => {
+    if (stopped || failure) return;
+    timer = setTimeout(() => {
+      timer = null;
+      running = heartbeatPageLease(client, userId, syncId, page, leaseId)
+        .catch((error: unknown) => {
+          failure = error;
+        })
+        .finally(() => {
+          running = null;
+          schedule();
+        });
+    }, PAGE_HEARTBEAT_INTERVAL_MS);
+  };
+
+  schedule();
+  return {
+    async stop(): Promise<unknown> {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (running) await running;
+      return failure;
+    },
+  };
+}
+
 async function handlePageError(
   client: AdminClient,
   connection: ConnectionRow,
   syncId: string,
+  page: number,
   leaseId: string,
   error: unknown,
 ): Promise<GitHubSyncProgress> {
@@ -233,6 +295,7 @@ async function handlePageError(
       client,
       connection.user_id,
       syncId,
+      page,
       leaseId,
       RECONNECT_ERROR,
       true,
@@ -246,6 +309,7 @@ async function handlePageError(
       client,
       connection.user_id,
       syncId,
+      page,
       leaseId,
       syncError.message,
     );
@@ -258,6 +322,7 @@ async function handlePageError(
       client,
       connection.user_id,
       syncId,
+      page,
       leaseId,
       syncError.message,
     );
@@ -268,6 +333,7 @@ async function handlePageError(
     client,
     connection.user_id,
     syncId,
+    page,
     leaseId,
     UNKNOWN_SYNC_ERROR,
   );
@@ -377,13 +443,7 @@ async function processPage(
   userId: string,
   syncId: string,
 ): Promise<GitHubSyncProgress> {
-  let connection: ConnectionRow | null;
-  try {
-    connection = await loadConnection(client, userId);
-  } catch (error) {
-    await cleanUpFailure(client, userId, syncId, null, UNKNOWN_SYNC_ERROR);
-    throw error;
-  }
+  const connection = await loadConnection(client, userId);
   if (!connection) return terminalProgress("not_connected", null);
   if (connection.connection_status === "reconnect_required") {
     return terminalProgress("reconnect_required", connection);
@@ -407,15 +467,24 @@ async function processPage(
       client,
       userId,
       syncId,
+      page,
       leaseId,
       UNKNOWN_SYNC_ERROR,
     );
     if (!cleaned) {
-      await cleanUpFailure(client, userId, syncId, null, UNKNOWN_SYNC_ERROR);
+      await cleanUpFailure(
+        client,
+        userId,
+        syncId,
+        page,
+        null,
+        UNKNOWN_SYNC_ERROR,
+      );
     }
     throw error;
   }
 
+  const heartbeat = startPageHeartbeat(client, userId, syncId, page, leaseId);
   try {
     const accessToken = await getValidGitHubAccessToken(userId);
     const providerPage = await listStarredRepositoriesPage(accessToken, page);
@@ -434,6 +503,8 @@ async function processPage(
       (item) =>
         prepareSavedRow(userId, item, existingByUrl.get(item.normalized_url)),
     );
+    const heartbeatError = await heartbeat.stop();
+    if (heartbeatError) throw heartbeatError;
     const applied = await client.rpc("apply_github_sync_page", {
       p_user_id: userId,
       p_sync_id: syncId,
@@ -466,7 +537,15 @@ async function processPage(
     }
     throw new Error("GitHub sync returned invalid progress.");
   } catch (error) {
-    return handlePageError(client, connection, syncId, leaseId, error);
+    const heartbeatError = await heartbeat.stop();
+    return handlePageError(
+      client,
+      connection,
+      syncId,
+      page,
+      leaseId,
+      heartbeatError ?? error,
+    );
   }
 }
 
@@ -480,7 +559,7 @@ export async function startGitHubSync(
     p_sync_id: syncId,
   });
   if (result.error) {
-    await cleanUpFailure(client, userId, syncId, null, UNKNOWN_SYNC_ERROR);
+    await cleanUpFailure(client, userId, syncId, 1, null, UNKNOWN_SYNC_ERROR);
     throw result.error;
   }
   if (!result.data)

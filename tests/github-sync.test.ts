@@ -1,6 +1,6 @@
 import { buildSearchableText } from "@/lib/search/searchable-text";
 import type { GitHubStarredRepository } from "@/lib/github/types";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createAdminClient: vi.fn(),
@@ -176,12 +176,19 @@ class AdminClientMock {
     values: Record<string, unknown>;
   }> = [];
   beforeConnectionUpdate: (() => void) | null = null;
+  beforeFailureCleanup: (() => void) | null = null;
+  beforeHeartbeat: (() => void) | null = null;
   beforePageClaim: (() => void) | null = null;
   beforeItemPersistence: (() => void) | null = null;
   failBeginAfterCommit = false;
   failConnectionSelectOnce = false;
+  failPageClaimAfterCommitOnce = false;
   failPageApply = false;
   failSavedItemsUpsert = false;
+  heartbeatActive = 0;
+  heartbeatCalls = 0;
+  heartbeatGate: Promise<void> | null = null;
+  heartbeatPeak = 0;
 
   from(table: string) {
     return new QueryMock(this, table);
@@ -191,6 +198,8 @@ class AdminClientMock {
     this.rpcCalls.push({ name, values });
     if (name === "begin_github_sync") return this.beginSync(values);
     if (name === "claim_github_sync_page") return this.claimPage(values);
+    if (name === "heartbeat_github_sync_page")
+      return this.heartbeatPage(values);
     if (name === "apply_github_sync_page") return this.applyPage(values);
     if (name === "fail_github_sync_page") return this.failPage(values);
     return Promise.resolve({ data: null, error: { message: "unknown RPC" } });
@@ -258,6 +267,13 @@ class AdminClientMock {
       page_lease_started_at: now,
       sync_started_at: now,
     });
+    if (this.failPageClaimAfterCommitOnce) {
+      this.failPageClaimAfterCommitOnce = false;
+      return Promise.resolve({
+        data: null,
+        error: { message: "claim response failed" },
+      });
+    }
     return Promise.resolve({ data: true, error: null });
   }
 
@@ -342,12 +358,45 @@ class AdminClientMock {
     });
   }
 
+  private async heartbeatPage(values: Record<string, unknown>) {
+    this.heartbeatCalls += 1;
+    this.heartbeatActive += 1;
+    this.heartbeatPeak = Math.max(this.heartbeatPeak, this.heartbeatActive);
+    try {
+      if (this.heartbeatGate) await this.heartbeatGate;
+      this.beforeHeartbeat?.();
+
+      const connection = this.connections.get(String(values.p_user_id));
+      if (
+        !connection ||
+        connection.connection_status !== "connected" ||
+        connection.sync_status !== "running" ||
+        connection.active_sync_id !== values.p_sync_id ||
+        connection.next_page !== values.p_page ||
+        connection.page_lease_id !== values.p_lease_id
+      ) {
+        return { data: false, error: null };
+      }
+
+      const now = new Date().toISOString();
+      Object.assign(connection, {
+        page_lease_started_at: now,
+        sync_started_at: now,
+      });
+      return { data: true, error: null };
+    } finally {
+      this.heartbeatActive -= 1;
+    }
+  }
+
   private failPage(values: Record<string, unknown>) {
+    this.beforeFailureCleanup?.();
     const connection = this.connections.get(String(values.p_user_id));
     if (
       !connection ||
       connection.sync_status !== "running" ||
       connection.active_sync_id !== values.p_sync_id ||
+      connection.next_page !== values.p_page ||
       connection.page_lease_id !== values.p_lease_id
     ) {
       return Promise.resolve({ data: false, error: null });
@@ -495,6 +544,10 @@ function queuePages(
   }
 }
 
+async function flushMicrotasks() {
+  for (let index = 0; index < 20; index += 1) await Promise.resolve();
+}
+
 describe("mapWithConcurrency", () => {
   it("preserves result order while never starting more than four workers", async () => {
     let active = 0;
@@ -544,6 +597,10 @@ describe("GitHub star synchronization", () => {
       .mockReset()
       .mockResolvedValue("github-access-token");
     mocks.listStarredRepositoriesPage.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("processes one page per call and completes only after the short page", async () => {
@@ -927,18 +984,20 @@ describe("GitHub star synchronization", () => {
     });
   });
 
-  it("cleans up a newly started sync when its connection read fails before claiming", async () => {
+  it("does not mutate a sync after a pre-claim read failure with no known page", async () => {
     admin.failConnectionSelectOnce = true;
 
     await expect(startGitHubSync(userId)).rejects.toThrow(
       "connection read failed",
     );
     expect(admin.connections.get(userId)).toMatchObject({
-      sync_status: "failed",
-      active_sync_id: null,
+      sync_status: "running",
       page_lease_id: null,
-      last_sync_error: "GitHub sync failed. Try again later.",
+      last_sync_error: null,
     });
+    expect(
+      admin.rpcCalls.filter((call) => call.name === "fail_github_sync_page"),
+    ).toHaveLength(0);
   });
 
   it("cleans up a sync when begin commits but its response fails", async () => {
@@ -953,6 +1012,43 @@ describe("GitHub star synchronization", () => {
       page_lease_id: null,
       last_sync_error: "GitHub sync failed. Try again later.",
     });
+    expect(
+      admin.rpcCalls.find((call) => call.name === "fail_github_sync_page")
+        ?.values,
+    ).toMatchObject({ p_page: 1, p_lease_id: null });
+  });
+
+  it("cannot fail a winner that advances between exact and fallback cleanup", async () => {
+    admin.failPageClaimAfterCommitOnce = true;
+    admin.beforeFailureCleanup = () => {
+      admin.beforeFailureCleanup = null;
+      Object.assign(admin.connections.get(userId)!, {
+        next_page: 2,
+        discovered_count: 100,
+        saved_count: 100,
+        page_lease_id: null,
+        page_lease_started_at: null,
+        sync_started_at: new Date().toISOString(),
+      });
+    };
+
+    await expect(startGitHubSync(userId)).rejects.toThrow(
+      "claim response failed",
+    );
+
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "running",
+      active_sync_id: expect.any(String),
+      next_page: 2,
+      discovered_count: 100,
+      saved_count: 100,
+      last_sync_error: null,
+    });
+    const cleanupCalls = admin.rpcCalls.filter(
+      (call) => call.name === "fail_github_sync_page",
+    );
+    expect(cleanupCalls).toHaveLength(2);
+    expect(cleanupCalls.every((call) => call.values.p_page === 1)).toBe(true);
   });
 
   it("does not fail a sync when a late duplicate claim sees the next page", async () => {
@@ -1044,6 +1140,122 @@ describe("GitHub star synchronization", () => {
       next_page: 2,
       page_lease_id: null,
       page_lease_started_at: null,
+    });
+  });
+
+  it("renews a long in-flight page often enough to prevent stale takeover", async () => {
+    vi.useFakeTimers({ now: new Date("2026-08-15T12:00:00.000Z") });
+    let releaseEmbeddings!: () => void;
+    const embeddingGate = new Promise<void>((resolve) => {
+      releaseEmbeddings = resolve;
+    });
+    mocks.embedDocument.mockImplementation(async () => {
+      await embeddingGate;
+      return { embedding: [0.25, 0.5], error: null };
+    });
+    queuePages(
+      {
+        repositories: Array.from({ length: 100 }, (_, index) =>
+          star(index + 1),
+        ),
+        nextPage: null,
+      },
+      { repositories: [], nextPage: null },
+    );
+
+    const firstPage = startGitHubSync(userId);
+    await flushMicrotasks();
+    expect(mocks.embedDocument).toHaveBeenCalledTimes(4);
+    const activeSyncId = admin.connections.get(userId)!.active_sync_id!;
+
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1_000);
+    const challenger = await startGitHubSync(userId);
+    releaseEmbeddings();
+    const firstOutcome = await firstPage.then(
+      (progress) => ({ progress }),
+      (error: unknown) => ({ error }),
+    );
+
+    expect(challenger).toMatchObject({
+      status: "running",
+      syncId: activeSyncId,
+      nextPage: 1,
+    });
+    expect(firstOutcome).toMatchObject({
+      progress: { status: "complete", discoveredCount: 100, savedCount: 100 },
+    });
+    expect(mocks.listStarredRepositoriesPage).toHaveBeenCalledTimes(1);
+    expect(admin.heartbeatCalls).toBeGreaterThan(0);
+  });
+
+  it("never overlaps heartbeat requests while page work is in flight", async () => {
+    vi.useFakeTimers({ now: new Date("2026-08-15T12:00:00.000Z") });
+    let releaseHeartbeat!: () => void;
+    admin.heartbeatGate = new Promise<void>((resolve) => {
+      releaseHeartbeat = resolve;
+    });
+    let releaseEmbedding!: () => void;
+    const embeddingGate = new Promise<void>((resolve) => {
+      releaseEmbedding = resolve;
+    });
+    mocks.embedDocument.mockImplementation(async () => {
+      await embeddingGate;
+      return { embedding: [0.25, 0.5], error: null };
+    });
+    queuePages({ repositories: [star(1)], nextPage: null });
+
+    const page = startGitHubSync(userId);
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(9 * 60 * 1_000);
+
+    expect(admin.heartbeatCalls).toBe(1);
+    expect(admin.heartbeatPeak).toBe(1);
+
+    releaseHeartbeat();
+    releaseEmbedding();
+    await expect(page).resolves.toMatchObject({ status: "complete" });
+    expect(admin.heartbeatPeak).toBe(1);
+  });
+
+  it("never applies a page after a periodic heartbeat loses its lease", async () => {
+    vi.useFakeTimers({ now: new Date("2026-08-15T12:00:00.000Z") });
+    const winnerSyncId = "59a3ed90-7cee-48eb-9c55-c3c2b8164cf4";
+    const winnerLeaseId = "b7b7d016-06d7-4cec-8e65-cf94c46405fb";
+    let releaseEmbedding!: () => void;
+    const embeddingGate = new Promise<void>((resolve) => {
+      releaseEmbedding = resolve;
+    });
+    mocks.embedDocument.mockImplementation(async () => {
+      await embeddingGate;
+      return { embedding: [0.25, 0.5], error: null };
+    });
+    admin.beforeHeartbeat = () => {
+      admin.beforeHeartbeat = null;
+      Object.assign(admin.connections.get(userId)!, {
+        active_sync_id: winnerSyncId,
+        page_lease_id: winnerLeaseId,
+        page_lease_started_at: new Date().toISOString(),
+        sync_started_at: new Date().toISOString(),
+      });
+    };
+    queuePages({ repositories: [star(1)], nextPage: null });
+
+    const page = startGitHubSync(userId);
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1_000);
+    releaseEmbedding();
+
+    await expect(page).rejects.toMatchObject({
+      name: "GitHubSyncError",
+      kind: "conflict",
+    });
+    expect(
+      admin.rpcCalls.filter((call) => call.name === "apply_github_sync_page"),
+    ).toHaveLength(0);
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "running",
+      active_sync_id: winnerSyncId,
+      page_lease_id: winnerLeaseId,
     });
   });
 

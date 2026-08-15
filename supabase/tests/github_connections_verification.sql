@@ -6,12 +6,14 @@ declare
   first_sync_id constant uuid := '00000000-0000-0000-0000-000000001001';
   second_sync_id constant uuid := '00000000-0000-0000-0000-000000001002';
   third_sync_id constant uuid := '00000000-0000-0000-0000-000000001003';
+  fourth_sync_id constant uuid := '00000000-0000-0000-0000-000000001004';
   first_lease_id constant uuid := '00000000-0000-0000-0000-000000002001';
   second_lease_id constant uuid := '00000000-0000-0000-0000-000000002002';
   displaced_lease_id constant uuid := '00000000-0000-0000-0000-000000002003';
   atomic_lease_id constant uuid := '00000000-0000-0000-0000-000000002004';
   first_heartbeat timestamptz;
   claimed_heartbeat timestamptz;
+  renewed_heartbeat timestamptz;
   cleaned boolean;
   progress jsonb;
 begin
@@ -30,8 +32,14 @@ begin
   if to_regprocedure('public.apply_github_sync_page(uuid,uuid,uuid,integer,integer,integer,integer,jsonb)') is null then
     raise exception 'apply_github_sync_page is missing';
   end if;
-  if to_regprocedure('public.fail_github_sync_page(uuid,uuid,uuid,text,boolean)') is null then
-    raise exception 'fail_github_sync_page is missing';
+  if to_regprocedure('public.fail_github_sync_page(uuid,uuid,integer,uuid,text,boolean)') is null then
+    raise exception 'page-scoped fail_github_sync_page is missing';
+  end if;
+  if to_regprocedure('public.fail_github_sync_page(uuid,uuid,uuid,text,boolean)') is not null then
+    raise exception 'the insecure fail_github_sync_page overload must be removed';
+  end if;
+  if to_regprocedure('public.heartbeat_github_sync_page(uuid,uuid,integer,uuid)') is null then
+    raise exception 'heartbeat_github_sync_page is missing';
   end if;
   if to_regprocedure('public.save_github_connection(uuid,bigint,text,text,text,text,timestamptz,timestamptz)') is null then
     raise exception 'save_github_connection is missing';
@@ -231,8 +239,9 @@ begin
     select 1
     from unnest(array[
       'public.claim_github_sync_page(uuid,uuid,integer,uuid)'::regprocedure,
+      'public.heartbeat_github_sync_page(uuid,uuid,integer,uuid)'::regprocedure,
       'public.apply_github_sync_page(uuid,uuid,uuid,integer,integer,integer,integer,jsonb)'::regprocedure,
-      'public.fail_github_sync_page(uuid,uuid,uuid,text,boolean)'::regprocedure
+      'public.fail_github_sync_page(uuid,uuid,integer,uuid,text,boolean)'::regprocedure
     ]) as required_function(function_oid)
     join pg_proc on pg_proc.oid = required_function.function_oid
     where not pg_proc.prosecdef
@@ -343,6 +352,30 @@ begin
   where user_id = test_user_id;
   if claimed_heartbeat <= first_heartbeat then
     raise exception 'claiming a page must renew the sync heartbeat';
+  end if;
+  perform pg_catalog.pg_sleep(0.01);
+  if not public.heartbeat_github_sync_page(
+    test_user_id,
+    first_sync_id,
+    1,
+    first_lease_id
+  ) then
+    raise exception 'the exact page lease heartbeat must renew';
+  end if;
+  select sync_started_at
+  into renewed_heartbeat
+  from public.github_connections
+  where user_id = test_user_id;
+  if renewed_heartbeat <= claimed_heartbeat then
+    raise exception 'a page heartbeat must renew the stale-sync timestamp';
+  end if;
+  if public.heartbeat_github_sync_page(
+    test_user_id,
+    first_sync_id,
+    1,
+    second_lease_id
+  ) then
+    raise exception 'a heartbeat must reject a different page lease';
   end if;
 
   progress := public.apply_github_sync_page(
@@ -538,6 +571,7 @@ begin
   cleaned := public.fail_github_sync_page(
     test_user_id,
     third_sync_id,
+    1,
     atomic_lease_id,
     'Safe verifier failure.',
     false
@@ -552,6 +586,37 @@ begin
       and last_sync_error = 'Safe verifier failure.'
   ) then
     raise exception 'failure cleanup must release only its active page lease';
+  end if;
+
+  if not public.begin_github_sync(test_user_id, fourth_sync_id) then
+    raise exception 'the advanced-page cleanup scenario must start';
+  end if;
+  update public.github_connections
+  set next_page = 2,
+      discovered_count = 100,
+      saved_count = 100,
+      page_lease_id = null,
+      page_lease_started_at = null
+  where user_id = test_user_id;
+  if public.fail_github_sync_page(
+    test_user_id,
+    fourth_sync_id,
+    1,
+    null,
+    'Stale page failure.',
+    false
+  ) or not exists (
+    select 1
+    from public.github_connections
+    where user_id = test_user_id
+      and sync_status = 'running'
+      and active_sync_id = fourth_sync_id
+      and next_page = 2
+      and discovered_count = 100
+      and saved_count = 100
+      and last_sync_error is null
+  ) then
+    raise exception 'null-lease cleanup must not fail an advanced page';
   end if;
 end;
 $$;
