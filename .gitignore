@@ -12,6 +12,7 @@
 # tests and tooling
 /coverage
 *.tsbuildinfo
+/.worktrees
 
 # OS/editor files
 .DS_Store
