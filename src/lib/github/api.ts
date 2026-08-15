@@ -145,9 +145,14 @@ function errorForResponse(response: Response): GitHubApiError {
   return new GitHubApiError("provider_error");
 }
 
+function isBadRefreshToken(value: unknown): boolean {
+  return isRecord(value) && value.error === "bad_refresh_token";
+}
+
 async function requestJson(
   url: string,
   options: RequestInit,
+  classifyBadRefreshToken = false,
 ): Promise<unknown> {
   let response: Response;
   try {
@@ -159,7 +164,18 @@ async function requestJson(
     throw new GitHubApiError("provider_error");
   }
 
-  if (!response.ok) throw errorForResponse(response);
+  if (!response.ok) {
+    if (classifyBadRefreshToken) {
+      try {
+        if (isBadRefreshToken(await response.json())) {
+          throw new GitHubApiError("unauthorized");
+        }
+      } catch (error) {
+        if (error instanceof GitHubApiError) throw error;
+      }
+    }
+    throw errorForResponse(response);
+  }
 
   try {
     return await response.json();
@@ -177,17 +193,27 @@ function apiHeaders(accessToken: string, accept: string): HeadersInit {
   };
 }
 
-async function requestToken(form: URLSearchParams): Promise<GitHubOAuthToken> {
-  const value = await requestJson(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "SaveSort/0.1",
+async function requestToken(
+  form: URLSearchParams,
+  classifyBadRefreshToken = false,
+): Promise<GitHubOAuthToken> {
+  const value = await requestJson(
+    TOKEN_URL,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "SaveSort/0.1",
+      },
+      body: form,
+      cache: "no-store",
     },
-    body: form,
-    cache: "no-store",
-  });
+    classifyBadRefreshToken,
+  );
+  if (classifyBadRefreshToken && isBadRefreshToken(value)) {
+    throw new GitHubApiError("unauthorized");
+  }
   const token = parseToken(value);
   if (!token) throw new GitHubApiError("provider_error");
   return token;
@@ -229,6 +255,7 @@ export async function refreshOAuthToken(
       grant_type: "refresh_token",
       refresh_token: refreshToken,
     }),
+    true,
   );
 }
 

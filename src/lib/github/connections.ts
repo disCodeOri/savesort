@@ -72,6 +72,30 @@ function needsRefresh(value: string | null, now: number): boolean {
   return value === null || Date.parse(value) <= now + REFRESH_WINDOW_MS;
 }
 
+function hasCompleteRotation(token: GitHubOAuthToken): boolean {
+  return (
+    typeof token.refresh_token === "string" &&
+    token.refresh_token.length > 0 &&
+    typeof token.refresh_token_expires_in === "number" &&
+    Number.isFinite(token.refresh_token_expires_in) &&
+    token.refresh_token_expires_in > 0
+  );
+}
+
+async function removeStagedSecret(
+  userId: string,
+  client: ReturnType<typeof createAdminClient>,
+): Promise<void> {
+  try {
+    await client
+      .from("github_connection_secrets")
+      .delete()
+      .eq("user_id", userId);
+  } catch {
+    // The connection write already failed; avoid leaking this cleanup failure.
+  }
+}
+
 export async function saveGitHubConnection(
   userId: string,
   user: GitHubAuthenticatedUser,
@@ -85,19 +109,6 @@ export async function saveGitHubConnection(
   const client = createAdminClient();
 
   try {
-    const connection = await client
-      .from("github_connections")
-      .upsert({
-        user_id: userId,
-        github_user_id: user.id,
-        github_login: user.login,
-        github_avatar_url: user.avatar_url,
-        connection_status: "connected",
-        sync_status: "idle",
-      })
-      .eq("user_id", userId);
-    if (connection.error) throw saveError();
-
     const secret = await client
       .from("github_connection_secrets")
       .upsert({
@@ -113,6 +124,24 @@ export async function saveGitHubConnection(
       .eq("user_id", userId);
     if (secret.error) throw saveError();
   } catch {
+    throw saveError();
+  }
+
+  try {
+    const connection = await client
+      .from("github_connections")
+      .upsert({
+        user_id: userId,
+        github_user_id: user.id,
+        github_login: user.login,
+        github_avatar_url: user.avatar_url,
+        connection_status: "connected",
+        sync_status: "idle",
+      })
+      .eq("user_id", userId);
+    if (connection.error) throw saveError();
+  } catch {
+    await removeStagedSecret(userId, client);
     throw saveError();
   }
 }
@@ -190,7 +219,7 @@ async function saveRefreshedToken(
   userId: string,
   token: GitHubOAuthToken,
   secret: SecretRow,
-): Promise<void> {
+): Promise<string> {
   const now = new Date();
   const client = createAdminClient();
   try {
@@ -200,19 +229,31 @@ async function saveRefreshedToken(
         access_token_ciphertext: encryptSecret(token.access_token),
         refresh_token_ciphertext: token.refresh_token
           ? encryptSecret(token.refresh_token)
-          : secret.refresh_token_ciphertext,
+          : null,
         access_token_expires_at: expiresAt(token.expires_in, now),
-        refresh_token_expires_at:
-          token.refresh_token_expires_in === undefined
-            ? secret.refresh_token_expires_at
-            : expiresAt(token.refresh_token_expires_in, now),
+        refresh_token_expires_at: expiresAt(
+          token.refresh_token_expires_in,
+          now,
+        ),
       })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("access_token_ciphertext", secret.access_token_ciphertext)
+      .select("access_token_ciphertext, access_token_expires_at")
+      .maybeSingle();
 
     if (result.error) throw saveError();
+    if (result.data) return token.access_token;
   } catch {
     throw saveError();
   }
+
+  const winner = await loadSecret(userId);
+  if (winner && !needsRefresh(winner.access_token_expires_at, Date.now())) {
+    return decryptSecret(winner.access_token_ciphertext);
+  }
+
+  await markGitHubReconnectRequired(userId);
+  throw reconnectError();
 }
 
 export async function getValidGitHubAccessToken(
@@ -238,8 +279,11 @@ export async function getValidGitHubAccessToken(
     const refreshedToken = await refreshOAuthToken(
       decryptSecret(secret.refresh_token_ciphertext),
     );
-    await saveRefreshedToken(userId, refreshedToken, secret);
-    return refreshedToken.access_token;
+    if (!hasCompleteRotation(refreshedToken)) {
+      await markGitHubReconnectRequired(userId);
+      throw reconnectError();
+    }
+    return saveRefreshedToken(userId, refreshedToken, secret);
   } catch (error) {
     if (error instanceof GitHubApiError && error.kind === "unauthorized") {
       await markGitHubReconnectRequired(userId);

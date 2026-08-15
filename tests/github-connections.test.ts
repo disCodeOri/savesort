@@ -73,9 +73,10 @@ class QueryMock implements PromiseLike<DatabaseResponse> {
   }
 
   select(columns: string) {
-    this.call.operation = "select";
     this.call.columns = columns;
-    this.client.calls.push(this.call);
+    if (this.call.operation === "select") {
+      this.client.calls.push(this.call);
+    }
     return this;
   }
 
@@ -110,19 +111,18 @@ class QueryMock implements PromiseLike<DatabaseResponse> {
 class AdminClientMock {
   calls: QueryCall[] = [];
   failures = new Map<string, Error>();
-  responses = new Map<string, DatabaseResponse>();
+  responses = new Map<string, DatabaseResponse | DatabaseResponse[]>();
 
   from(table: string) {
     return new QueryMock(this, table);
   }
 
   responseFor(call: QueryCall): DatabaseResponse {
-    return (
-      this.responses.get(`${call.table}:${call.operation}`) ?? {
-        data: null,
-        error: null,
-      }
-    );
+    const response = this.responses.get(`${call.table}:${call.operation}`);
+    if (Array.isArray(response)) {
+      return response.shift() ?? { data: null, error: null };
+    }
+    return response ?? { data: null, error: null };
   }
 
   failureFor(call: QueryCall): Error | undefined {
@@ -131,6 +131,16 @@ class AdminClientMock {
 }
 
 const userId = "a17f824a-0d1f-48fe-8d2e-6a4777c9d113";
+
+function expiredSecret(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    access_token_ciphertext: "encrypted:ghu_old",
+    refresh_token_ciphertext: "encrypted:ghr_old",
+    access_token_expires_at: new Date(Date.now() + 1_000).toISOString(),
+    refresh_token_expires_at: new Date(Date.now() + 7_200_000).toISOString(),
+    ...overrides,
+  };
+}
 
 function lastCall(client: AdminClientMock, operation: QueryCall["operation"]) {
   return client.calls.filter((call) => call.operation === operation).at(-1);
@@ -206,6 +216,48 @@ describe("GitHub connections", () => {
     ).toBe(true);
   });
 
+  it("stages credentials before publishing connection metadata", async () => {
+    await saveGitHubConnection(
+      userId,
+      { id: 1, login: "octocat", avatar_url: "https://avatar.test" },
+      {
+        access_token: "ghu_access",
+        refresh_token: "ghr_refresh",
+        expires_in: 3_600,
+        refresh_token_expires_in: 7_200,
+      },
+    );
+
+    expect(
+      admin.calls
+        .filter((call) => call.operation === "upsert")
+        .map((call) => call.table),
+    ).toEqual(["github_connection_secrets", "github_connections"]);
+  });
+
+  it("removes staged credentials when connection metadata cannot be saved", async () => {
+    admin.responses.set("github_connections:upsert", {
+      data: null,
+      error: { message: "metadata write failed" },
+    });
+
+    await expect(
+      saveGitHubConnection(
+        userId,
+        { id: 1, login: "octocat", avatar_url: "https://avatar.test" },
+        { access_token: "ghu_access", expires_in: 3_600 },
+      ),
+    ).rejects.toThrow("GitHub connection could not be saved.");
+
+    expect(
+      admin.calls.map((call) => `${call.operation}:${call.table}`),
+    ).toEqual([
+      "upsert:github_connection_secrets",
+      "upsert:github_connections",
+      "delete:github_connection_secrets",
+    ]);
+  });
+
   it("returns a public connection status without credential fields", async () => {
     admin.responses.set("github_connections:select", {
       data: {
@@ -244,14 +296,9 @@ describe("GitHub connections", () => {
 
   it("refreshes access tokens expiring within sixty seconds", async () => {
     admin.responses.set("github_connection_secrets:select", {
-      data: {
-        access_token_ciphertext: "encrypted:ghu_old",
-        refresh_token_ciphertext: "encrypted:ghr_old",
+      data: expiredSecret({
         access_token_expires_at: new Date(Date.now() + 59_000).toISOString(),
-        refresh_token_expires_at: new Date(
-          Date.now() + 7_200_000,
-        ).toISOString(),
-      },
+      }),
       error: null,
     });
     mocks.refreshOAuthToken.mockResolvedValue({
@@ -259,6 +306,13 @@ describe("GitHub connections", () => {
       refresh_token: "ghr_new",
       expires_in: 3_600,
       refresh_token_expires_in: 7_200,
+    });
+    admin.responses.set("github_connection_secrets:update", {
+      data: {
+        access_token_ciphertext: "encrypted:ghu_new",
+        access_token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      },
+      error: null,
     });
 
     await expect(getValidGitHubAccessToken(userId)).resolves.toBe("ghu_new");
@@ -271,6 +325,10 @@ describe("GitHub connections", () => {
     expect(lastCall(admin, "update")?.filters).toContainEqual([
       "user_id",
       userId,
+    ]);
+    expect(lastCall(admin, "update")?.filters).toContainEqual([
+      "access_token_ciphertext",
+      "encrypted:ghu_old",
     ]);
   });
 
@@ -301,14 +359,7 @@ describe("GitHub connections", () => {
 
   it("marks the connection for reconnection when refresh is unauthorized", async () => {
     admin.responses.set("github_connection_secrets:select", {
-      data: {
-        access_token_ciphertext: "encrypted:ghu_old",
-        refresh_token_ciphertext: "encrypted:ghr_old",
-        access_token_expires_at: new Date(Date.now() + 1_000).toISOString(),
-        refresh_token_expires_at: new Date(
-          Date.now() + 7_200_000,
-        ).toISOString(),
-      },
+      data: expiredSecret(),
       error: null,
     });
     mocks.refreshOAuthToken.mockRejectedValue(
@@ -326,14 +377,7 @@ describe("GitHub connections", () => {
 
   it("maps a rejected rotated-credential write to a safe error", async () => {
     admin.responses.set("github_connection_secrets:select", {
-      data: {
-        access_token_ciphertext: "encrypted:ghu_old",
-        refresh_token_ciphertext: "encrypted:ghr_old",
-        access_token_expires_at: new Date(Date.now() + 1_000).toISOString(),
-        refresh_token_expires_at: new Date(
-          Date.now() + 7_200_000,
-        ).toISOString(),
-      },
+      data: expiredSecret(),
       error: null,
     });
     admin.failures.set(
@@ -342,11 +386,146 @@ describe("GitHub connections", () => {
     );
     mocks.refreshOAuthToken.mockResolvedValue({
       access_token: "ghu_new",
+      refresh_token: "ghr_new",
       expires_in: 3_600,
+      refresh_token_expires_in: 7_200,
     });
 
     await expect(getValidGitHubAccessToken(userId)).rejects.toThrow(
       "GitHub connection could not be saved.",
     );
+  });
+
+  it("marks reconnect required for an expired stored refresh token", async () => {
+    admin.responses.set("github_connection_secrets:select", {
+      data: expiredSecret({
+        refresh_token_expires_at: new Date(Date.now() - 1_000).toISOString(),
+      }),
+      error: null,
+    });
+
+    await expect(getValidGitHubAccessToken(userId)).rejects.toThrow(
+      "GitHub needs to be reconnected.",
+    );
+
+    expect(mocks.refreshOAuthToken).not.toHaveBeenCalled();
+    expect(lastCall(admin, "update")?.values).toEqual({
+      connection_status: "reconnect_required",
+    });
+  });
+
+  it("marks reconnect required when the stored refresh token is missing", async () => {
+    admin.responses.set("github_connection_secrets:select", {
+      data: expiredSecret({ refresh_token_ciphertext: null }),
+      error: null,
+    });
+
+    await expect(getValidGitHubAccessToken(userId)).rejects.toThrow(
+      "GitHub needs to be reconnected.",
+    );
+
+    expect(mocks.refreshOAuthToken).not.toHaveBeenCalled();
+    expect(lastCall(admin, "update")?.values).toEqual({
+      connection_status: "reconnect_required",
+    });
+  });
+
+  it("marks reconnect required when GitHub omits rotated credentials", async () => {
+    admin.responses.set("github_connection_secrets:select", {
+      data: expiredSecret(),
+      error: null,
+    });
+    mocks.refreshOAuthToken.mockResolvedValue({
+      access_token: "ghu_new",
+      expires_in: 3_600,
+    });
+
+    await expect(getValidGitHubAccessToken(userId)).rejects.toThrow(
+      "GitHub needs to be reconnected.",
+    );
+
+    expect(
+      admin.calls.filter(
+        (call) =>
+          call.operation === "update" &&
+          call.table === "github_connection_secrets",
+      ),
+    ).toHaveLength(0);
+    expect(lastCall(admin, "update")?.values).toEqual({
+      connection_status: "reconnect_required",
+    });
+  });
+
+  it("marks reconnect required when GitHub omits the rotated expiry", async () => {
+    admin.responses.set("github_connection_secrets:select", {
+      data: expiredSecret(),
+      error: null,
+    });
+    mocks.refreshOAuthToken.mockResolvedValue({
+      access_token: "ghu_new",
+      refresh_token: "ghr_new",
+      expires_in: 3_600,
+    });
+
+    await expect(getValidGitHubAccessToken(userId)).rejects.toThrow(
+      "GitHub needs to be reconnected.",
+    );
+
+    expect(
+      admin.calls.filter(
+        (call) =>
+          call.operation === "update" &&
+          call.table === "github_connection_secrets",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("does not return an unpersisted rotated access token after a zero-row update", async () => {
+    admin.responses.set("github_connection_secrets:select", [
+      { data: expiredSecret(), error: null },
+      { data: null, error: null },
+    ]);
+    admin.responses.set("github_connection_secrets:update", {
+      data: null,
+      error: null,
+    });
+    mocks.refreshOAuthToken.mockResolvedValue({
+      access_token: "ghu_new",
+      refresh_token: "ghr_new",
+      expires_in: 3_600,
+      refresh_token_expires_in: 7_200,
+    });
+
+    await expect(getValidGitHubAccessToken(userId)).rejects.toThrow(
+      "GitHub needs to be reconnected.",
+    );
+  });
+
+  it("uses the persisted winner when another refresh updates credentials first", async () => {
+    admin.responses.set("github_connection_secrets:select", [
+      { data: expiredSecret(), error: null },
+      {
+        data: expiredSecret({
+          access_token_ciphertext: "encrypted:ghu_winner",
+          refresh_token_ciphertext: "encrypted:ghr_winner",
+          access_token_expires_at: new Date(
+            Date.now() + 3_600_000,
+          ).toISOString(),
+        }),
+        error: null,
+      },
+    ]);
+    admin.responses.set("github_connection_secrets:update", {
+      data: null,
+      error: null,
+    });
+    mocks.refreshOAuthToken.mockResolvedValue({
+      access_token: "ghu_new",
+      refresh_token: "ghr_new",
+      expires_in: 3_600,
+      refresh_token_expires_in: 7_200,
+    });
+
+    await expect(getValidGitHubAccessToken(userId)).resolves.toBe("ghu_winner");
   });
 });

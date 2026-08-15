@@ -186,6 +186,25 @@ describe("GitHub API client", () => {
     expect(form.get("refresh_token")).toBe("ghr_old");
   });
 
+  it("classifies GitHub bad_refresh_token responses as unauthorized", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: "bad_refresh_token",
+          error_description: "The refresh token is invalid or expired.",
+        }),
+        {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    await expect(refreshOAuthToken("ghr_old")).rejects.toMatchObject({
+      kind: "unauthorized",
+    } satisfies Partial<GitHubApiError>);
+  });
+
   it("maps a missing OAuth configuration to a provider error", async () => {
     delete process.env.GITHUB_APP_CLIENT_ID;
 
