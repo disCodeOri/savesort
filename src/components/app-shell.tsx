@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { signOutAction } from "@/app/auth/actions";
+import { GitHubAutoSync } from "@/components/github-auto-sync";
 import { SaveSheet } from "@/components/save-sheet";
 
 export function AppShell({
@@ -69,6 +70,7 @@ export function AppShell({
         </div>
       </header>
 
+      <GitHubAutoSync />
       <div className="page-canvas">{children}</div>
 
       <button

@@ -31,7 +31,7 @@ export async function signInAction(formData: FormData) {
     redirect(
       `/login?error=${encodeURIComponent("Email or password wasn't recognized.")}`,
     );
-  redirect("/search");
+  redirect("/search?githubSync=login");
 }
 
 export async function signUpAction(formData: FormData) {
