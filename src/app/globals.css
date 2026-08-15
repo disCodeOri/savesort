@@ -783,6 +783,53 @@ textarea {
 .library-list {
   margin-top: 18px;
 }
+.github-connection-panel {
+  margin: 18px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px;
+}
+.github-connection-status,
+.github-connection-account,
+.github-connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.github-connection-status {
+  justify-content: space-between;
+}
+.github-connection-status > p,
+.github-connection-account p,
+.github-connection-account small,
+.github-connection-progress {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.github-connection-account {
+  min-width: 0;
+}
+.github-connection-account img {
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+.github-connection-account strong,
+.github-connection-account small {
+  display: block;
+}
+.github-connection-disconnect {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.github-connection-progress {
+  margin-top: 10px;
+}
 .result-actions {
   align-self: center;
 }
@@ -1016,6 +1063,15 @@ textarea {
   }
   .library-list {
     margin-top: 6px;
+  }
+  .github-connection-status,
+  .github-connection-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .github-connection-status .button,
+  .github-connection-disconnect {
+    width: 100%;
   }
   .item-menu {
     position: fixed;

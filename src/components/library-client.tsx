@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { GitHubConnectionPanel } from "@/components/github-connection-panel";
 import { ResultCard } from "@/components/result-card";
 import { SourceFilters, type VisibleSource } from "@/components/source-filters";
 import type { SavedItem } from "@/lib/items/types";
@@ -97,6 +98,9 @@ export function LibraryClient() {
         </div>
         <span>{items.length} saved</span>
       </div>
+      <GitHubConnectionPanel
+        onLibraryChanged={() => setRevision((value) => value + 1)}
+      />
       <SourceFilters value={source} onChange={setSource} />
       {loading ? (
         <div className="loading-state">
