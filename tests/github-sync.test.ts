@@ -51,6 +51,8 @@ type ConnectionRow = {
   sync_started_at: string | null;
   last_synced_at: string | null;
   last_sync_error: string | null;
+  page_lease_id: string | null;
+  page_lease_started_at: string | null;
 };
 
 type SavedRow = {
@@ -71,6 +73,7 @@ type SavedRow = {
   embedding: number[] | null;
   indexing_status: "ready" | "keyword_only" | "pending" | "failed";
   indexing_error: string | null;
+  updated_at: string;
 };
 
 type QueryOperation = "select" | "update" | "upsert" | "delete";
@@ -173,6 +176,11 @@ class AdminClientMock {
     values: Record<string, unknown>;
   }> = [];
   beforeConnectionUpdate: (() => void) | null = null;
+  beforePageClaim: (() => void) | null = null;
+  beforeItemPersistence: (() => void) | null = null;
+  failBeginAfterCommit = false;
+  failConnectionSelectOnce = false;
+  failPageApply = false;
   failSavedItemsUpsert = false;
 
   from(table: string) {
@@ -181,10 +189,14 @@ class AdminClientMock {
 
   rpc(name: string, values: Record<string, unknown>) {
     this.rpcCalls.push({ name, values });
-    if (name !== "begin_github_sync") {
-      return Promise.resolve({ data: null, error: { message: "unknown RPC" } });
-    }
+    if (name === "begin_github_sync") return this.beginSync(values);
+    if (name === "claim_github_sync_page") return this.claimPage(values);
+    if (name === "apply_github_sync_page") return this.applyPage(values);
+    if (name === "fail_github_sync_page") return this.failPage(values);
+    return Promise.resolve({ data: null, error: { message: "unknown RPC" } });
+  }
 
+  private beginSync(values: Record<string, unknown>) {
     const userId = String(values.p_user_id);
     const syncId = String(values.p_sync_id);
     const connection = this.connections.get(userId);
@@ -209,6 +221,146 @@ class AdminClientMock {
       skipped_count: 0,
       sync_started_at: new Date().toISOString(),
       last_sync_error: null,
+      page_lease_id: null,
+      page_lease_started_at: null,
+    });
+    if (this.failBeginAfterCommit) {
+      return Promise.resolve({
+        data: null,
+        error: { message: "begin response failed" },
+      });
+    }
+    return Promise.resolve({ data: true, error: null });
+  }
+
+  private claimPage(values: Record<string, unknown>) {
+    this.beforePageClaim?.();
+    const connection = this.connections.get(String(values.p_user_id));
+    const staleLease =
+      connection?.page_lease_started_at !== null &&
+      connection?.page_lease_started_at !== undefined &&
+      Date.parse(connection.page_lease_started_at) <
+        Date.now() - 10 * 60 * 1_000;
+    if (
+      !connection ||
+      connection.connection_status !== "connected" ||
+      connection.sync_status !== "running" ||
+      connection.active_sync_id !== values.p_sync_id ||
+      connection.next_page !== values.p_page ||
+      (connection.page_lease_id !== null && !staleLease)
+    ) {
+      return Promise.resolve({ data: false, error: null });
+    }
+
+    const now = new Date().toISOString();
+    Object.assign(connection, {
+      page_lease_id: values.p_lease_id,
+      page_lease_started_at: now,
+      sync_started_at: now,
+    });
+    return Promise.resolve({ data: true, error: null });
+  }
+
+  private applyPage(values: Record<string, unknown>) {
+    this.beforeItemPersistence?.();
+    const connection = this.connections.get(String(values.p_user_id));
+    if (
+      !connection ||
+      connection.connection_status !== "connected" ||
+      connection.sync_status !== "running" ||
+      connection.active_sync_id !== values.p_sync_id ||
+      connection.next_page !== values.p_page ||
+      connection.page_lease_id !== values.p_lease_id
+    ) {
+      return Promise.resolve({ data: null, error: null });
+    }
+    if (this.failPageApply) {
+      return Promise.resolve({
+        data: null,
+        error: { message: "atomic page apply failed" },
+      });
+    }
+
+    const nextRows = this.savedRows.map((row) => structuredClone(row));
+    let insertedCount = 0;
+    for (const value of values.p_items as Array<Record<string, unknown>>) {
+      const existing = nextRows.find(
+        (candidate) =>
+          candidate.user_id === value.user_id &&
+          candidate.normalized_url === value.normalized_url,
+      );
+      const expectedUpdatedAt = value.expected_updated_at;
+      const { expected_updated_at: _expectedUpdatedAt, ...savedValue } = value;
+      void _expectedUpdatedAt;
+      if (!existing && expectedUpdatedAt === null) {
+        nextRows.push({
+          id: `item-${nextRows.length + 1}`,
+          ...(savedValue as Omit<SavedRow, "id" | "updated_at">),
+          updated_at: new Date().toISOString(),
+        });
+        insertedCount += 1;
+      } else if (
+        existing &&
+        typeof expectedUpdatedAt === "string" &&
+        existing.updated_at === expectedUpdatedAt
+      ) {
+        Object.assign(existing, savedValue, {
+          updated_at: new Date(Date.now() + 1).toISOString(),
+        });
+      }
+    }
+
+    this.savedRows.splice(0, this.savedRows.length, ...nextRows);
+    const nextPage = values.p_next_page as number | null;
+    const now = new Date().toISOString();
+    Object.assign(connection, {
+      discovered_count:
+        connection.discovered_count + Number(values.p_discovered_count),
+      saved_count: connection.saved_count + insertedCount,
+      skipped_count: connection.skipped_count + Number(values.p_skipped_count),
+      page_lease_id: null,
+      page_lease_started_at: null,
+      sync_started_at: now,
+      last_sync_error: null,
+      ...(nextPage === null
+        ? {
+            sync_status: "idle",
+            active_sync_id: null,
+            last_synced_at: now,
+          }
+        : { next_page: nextPage }),
+    });
+    return Promise.resolve({
+      data: {
+        status: nextPage === null ? "complete" : "running",
+        next_page: nextPage,
+        discovered_count: connection.discovered_count,
+        saved_count: connection.saved_count,
+        skipped_count: connection.skipped_count,
+      },
+      error: null,
+    });
+  }
+
+  private failPage(values: Record<string, unknown>) {
+    const connection = this.connections.get(String(values.p_user_id));
+    if (
+      !connection ||
+      connection.sync_status !== "running" ||
+      connection.active_sync_id !== values.p_sync_id ||
+      connection.page_lease_id !== values.p_lease_id
+    ) {
+      return Promise.resolve({ data: false, error: null });
+    }
+    Object.assign(connection, {
+      connection_status: values.p_reconnect_required
+        ? "reconnect_required"
+        : connection.connection_status,
+      sync_status: "failed",
+      active_sync_id: null,
+      page_lease_id: null,
+      page_lease_started_at: null,
+      last_sync_error: values.p_error,
     });
     return Promise.resolve({ data: true, error: null });
   }
@@ -225,6 +377,10 @@ class AdminClientMock {
 
   private executeConnection(call: QueryCall): DatabaseResult {
     if (call.operation === "update") this.beforeConnectionUpdate?.();
+    if (call.operation === "select" && this.failConnectionSelectOnce) {
+      this.failConnectionSelectOnce = false;
+      return { data: null, error: { message: "connection read failed" } };
+    }
     const rows = [...this.connections.values()].filter((row) =>
       matches(row as unknown as Record<string, unknown>, call.filters),
     );
@@ -246,6 +402,7 @@ class AdminClientMock {
       };
     }
     if (call.operation === "upsert") {
+      this.beforeItemPersistence?.();
       if (this.failSavedItemsUpsert) {
         return { data: null, error: { message: "database details" } };
       }
@@ -262,6 +419,7 @@ class AdminClientMock {
           this.savedRows.push({
             id: `item-${this.savedRows.length + 1}`,
             ...row,
+            updated_at: new Date().toISOString(),
           });
       }
       return { data: values, error: null };
@@ -298,6 +456,8 @@ function connected(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
     sync_started_at: null,
     last_synced_at: null,
     last_sync_error: null,
+    page_lease_id: null,
+    page_lease_started_at: null,
     ...overrides,
   };
 }
@@ -514,12 +674,11 @@ describe("GitHub star synchronization", () => {
     expect(admin.savedRows[0]?.embedding).toEqual([9, 9]);
     expect(mocks.embedDocument).not.toHaveBeenCalled();
 
-    const upserts = admin.calls.filter(
-      (call) => call.table === "saved_items" && call.operation === "upsert",
-    );
-    expect(upserts.at(-1)?.options).toEqual({
-      onConflict: "user_id,normalized_url",
-    });
+    expect(
+      admin.calls.filter(
+        (call) => call.table === "saved_items" && call.operation === "upsert",
+      ),
+    ).toHaveLength(0);
     expect(admin.savedRows.every((row) => row.user_id === userId)).toBe(true);
     expect(admin.calls.some((call) => call.operation === "delete")).toBe(false);
   });
@@ -622,8 +781,8 @@ describe("GitHub star synchronization", () => {
 
   it("does not report progress when another sync wins the active-ID guard", async () => {
     const winnerSyncId = "03e7df6c-18cb-4b1c-a5cc-b786c6520a47";
-    admin.beforeConnectionUpdate = () => {
-      admin.beforeConnectionUpdate = null;
+    admin.beforeItemPersistence = () => {
+      admin.beforeItemPersistence = null;
       Object.assign(admin.connections.get(userId)!, {
         active_sync_id: winnerSyncId,
         sync_started_at: new Date().toISOString(),
@@ -634,9 +793,257 @@ describe("GitHub star synchronization", () => {
     await expect(startGitHubSync(userId)).rejects.toBeInstanceOf(
       GitHubSyncError,
     );
+    expect(admin.savedRows).toHaveLength(0);
     await expect(startGitHubSync(userId)).resolves.toMatchObject({
       status: "running",
       syncId: winnerSyncId,
+    });
+  });
+
+  it("lets only one concurrent continuation own and apply the expected page", async () => {
+    const activeSyncId = "31906d3b-cb9a-4be4-925f-34e0e815ad59";
+    admin.connections.set(
+      userId,
+      connected({
+        sync_status: "running",
+        active_sync_id: activeSyncId,
+        sync_started_at: new Date().toISOString(),
+      }),
+    );
+    queuePages({ repositories: [star(1)], nextPage: null });
+
+    const results = await Promise.allSettled([
+      continueGitHubSync(userId, activeSyncId),
+      continueGitHubSync(userId, activeSyncId),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+    expect(mocks.listStarredRepositoriesPage).toHaveBeenCalledTimes(1);
+    expect(admin.savedRows).toHaveLength(1);
+    expect(admin.connections.get(userId)).toMatchObject({
+      discovered_count: 1,
+      saved_count: 1,
+      skipped_count: 0,
+    });
+  });
+
+  it("preserves a concurrent user edit and defers its provider refresh", async () => {
+    queuePages(
+      { repositories: [star(1)], nextPage: null },
+      {
+        repositories: [
+          {
+            ...star(1),
+            repo: { ...star(1).repo, description: "provider refresh" },
+          },
+        ],
+        nextPage: null,
+      },
+    );
+    await startGitHubSync(userId);
+    const row = admin.savedRows[0]!;
+    row.notes = "note before sync";
+    row.content = "content before sync";
+    row.tags = ["personal", "search", "TypeScript"];
+    row.searchable_text = buildSearchableText(row);
+    row.updated_at = "2026-08-15T12:00:00.000Z";
+
+    admin.beforeItemPersistence = () => {
+      admin.beforeItemPersistence = null;
+      Object.assign(row, {
+        notes: "concurrent note",
+        content: "concurrent content",
+        tags: ["concurrent-user-tag"],
+        embedding: [7, 7],
+        indexing_status: "ready",
+        searchable_text: buildSearchableText({
+          ...row,
+          notes: "concurrent note",
+          content: "concurrent content",
+          tags: ["concurrent-user-tag"],
+        }),
+        updated_at: "2026-08-15T12:01:00.000Z",
+      });
+    };
+
+    await startGitHubSync(userId);
+
+    expect(admin.savedRows[0]).toMatchObject({
+      notes: "concurrent note",
+      content: "concurrent content",
+      tags: ["concurrent-user-tag"],
+      description: "Repository 1",
+      embedding: [7, 7],
+      updated_at: "2026-08-15T12:01:00.000Z",
+    });
+  });
+
+  it("rolls back item persistence with failed progress and retries without undercounting", async () => {
+    admin.failPageApply = true;
+    queuePages({ repositories: [star(1)], nextPage: null });
+
+    await expect(startGitHubSync(userId)).rejects.toThrow(
+      "atomic page apply failed",
+    );
+    expect(admin.savedRows).toHaveLength(0);
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "failed",
+      active_sync_id: null,
+      discovered_count: 0,
+      saved_count: 0,
+      skipped_count: 0,
+    });
+
+    admin.failPageApply = false;
+    queuePages({ repositories: [star(1)], nextPage: null });
+    await expect(startGitHubSync(userId)).resolves.toEqual({
+      status: "complete",
+      discoveredCount: 1,
+      savedCount: 1,
+      skippedCount: 0,
+    });
+    expect(admin.savedRows).toHaveLength(1);
+  });
+
+  it("releases its page lease into a safe failed state after an unexpected error", async () => {
+    mocks.getValidGitHubAccessToken.mockRejectedValue(
+      new Error("secret token-store failure"),
+    );
+
+    await expect(startGitHubSync(userId)).rejects.toThrow(
+      "secret token-store failure",
+    );
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "failed",
+      active_sync_id: null,
+      page_lease_id: null,
+      page_lease_started_at: null,
+      last_sync_error: "GitHub sync failed. Try again later.",
+    });
+  });
+
+  it("cleans up a newly started sync when its connection read fails before claiming", async () => {
+    admin.failConnectionSelectOnce = true;
+
+    await expect(startGitHubSync(userId)).rejects.toThrow(
+      "connection read failed",
+    );
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "failed",
+      active_sync_id: null,
+      page_lease_id: null,
+      last_sync_error: "GitHub sync failed. Try again later.",
+    });
+  });
+
+  it("cleans up a sync when begin commits but its response fails", async () => {
+    admin.failBeginAfterCommit = true;
+
+    await expect(startGitHubSync(userId)).rejects.toThrow(
+      "begin response failed",
+    );
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "failed",
+      active_sync_id: null,
+      page_lease_id: null,
+      last_sync_error: "GitHub sync failed. Try again later.",
+    });
+  });
+
+  it("does not fail a sync when a late duplicate claim sees the next page", async () => {
+    const activeSyncId = "6d5eaeeb-908c-49b7-92fd-b5cb9e0c8332";
+    admin.connections.set(
+      userId,
+      connected({
+        sync_status: "running",
+        active_sync_id: activeSyncId,
+        sync_started_at: new Date().toISOString(),
+      }),
+    );
+    admin.beforePageClaim = () => {
+      admin.beforePageClaim = null;
+      Object.assign(admin.connections.get(userId)!, {
+        next_page: 2,
+        discovered_count: 100,
+        saved_count: 100,
+        page_lease_id: null,
+        page_lease_started_at: null,
+        sync_started_at: new Date().toISOString(),
+      });
+    };
+
+    await expect(
+      continueGitHubSync(userId, activeSyncId),
+    ).rejects.toMatchObject({
+      name: "GitHubSyncError",
+      kind: "conflict",
+    });
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "running",
+      active_sync_id: activeSyncId,
+      next_page: 2,
+      discovered_count: 100,
+      saved_count: 100,
+      last_sync_error: null,
+    });
+  });
+
+  it("loads existing rows in URL chunks no larger than twenty-five", async () => {
+    queuePages({
+      repositories: Array.from({ length: 100 }, (_, index) => star(index + 1)),
+      nextPage: null,
+    });
+
+    await startGitHubSync(userId);
+
+    const urlFilters = admin.calls
+      .flatMap((call) => call.filters)
+      .filter(
+        (
+          filter,
+        ): filter is Extract<QueryCall["filters"][number], { kind: "in" }> =>
+          filter.kind === "in" && filter.column === "normalized_url",
+      );
+    expect(urlFilters).toHaveLength(4);
+    expect(Math.max(...urlFilters.map((filter) => filter.values.length))).toBe(
+      25,
+    );
+  });
+
+  it("renews the sync heartbeat while advancing a claimed page", async () => {
+    const activeSyncId = "eceaeb20-13b5-464f-8dbc-ff8280e36547";
+    const originalHeartbeat = new Date(
+      Date.now() - 5 * 60 * 1_000,
+    ).toISOString();
+    admin.connections.set(
+      userId,
+      connected({
+        sync_status: "running",
+        active_sync_id: activeSyncId,
+        sync_started_at: originalHeartbeat,
+      }),
+    );
+    queuePages({
+      repositories: Array.from({ length: 100 }, (_, index) => star(index + 1)),
+      nextPage: 2,
+    });
+
+    await continueGitHubSync(userId, activeSyncId);
+
+    expect(
+      Date.parse(admin.connections.get(userId)!.sync_started_at!),
+    ).toBeGreaterThan(Date.parse(originalHeartbeat));
+    expect(admin.connections.get(userId)).toMatchObject({
+      sync_status: "running",
+      active_sync_id: activeSyncId,
+      next_page: 2,
+      page_lease_id: null,
+      page_lease_started_at: null,
     });
   });
 

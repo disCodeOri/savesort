@@ -15,12 +15,14 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const CONNECTION_COLUMNS =
-  "user_id, connection_status, sync_status, active_sync_id, next_page, discovered_count, saved_count, skipped_count, sync_started_at, last_synced_at, last_sync_error";
+  "user_id, connection_status, sync_status, active_sync_id, next_page, discovered_count, saved_count, skipped_count, sync_started_at, last_synced_at, last_sync_error, page_lease_id, page_lease_started_at";
 const SAVED_ITEM_COLUMNS =
-  "user_id, url, normalized_url, source, title, description, notes, content, author, thumbnail_url, tags, metadata, searchable_text, embedding, indexing_status, indexing_error";
+  "user_id, url, normalized_url, source, title, description, notes, content, author, thumbnail_url, tags, metadata, searchable_text, embedding, indexing_status, indexing_error, updated_at";
 const EMBEDDING_CONCURRENCY = 4;
+const EXISTING_ITEM_CHUNK_SIZE = 25;
 const INDEXING_ERROR = "Semantic indexing is temporarily unavailable.";
 const RECONNECT_ERROR = "GitHub access expired. Reconnect to resume syncing.";
+const UNKNOWN_SYNC_ERROR = "GitHub sync failed. Try again later.";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 type ConnectionStatus = "connected" | "reconnect_required";
@@ -38,6 +40,8 @@ interface ConnectionRow {
   sync_started_at: string | null;
   last_synced_at: string | null;
   last_sync_error: string | null;
+  page_lease_id: string | null;
+  page_lease_started_at: string | null;
 }
 
 interface ExistingSavedItem {
@@ -54,9 +58,18 @@ interface ExistingSavedItem {
   tags: string[];
   metadata: Record<string, unknown>;
   searchable_text: string;
-  embedding: number[] | null;
+  embedding: unknown;
   indexing_status: "ready" | "keyword_only" | "pending" | "failed";
   indexing_error: string | null;
+  updated_at: string;
+}
+
+interface AppliedPage {
+  status: "running" | "complete";
+  next_page: number | null;
+  discovered_count: number;
+  saved_count: number;
+  skipped_count: number;
 }
 
 interface SyncCounts {
@@ -146,62 +159,69 @@ async function loadConnection(
   return result.data as ConnectionRow | null;
 }
 
-async function guardedConnectionUpdate(
+async function claimPageLease(
   client: AdminClient,
   userId: string,
   syncId: string,
-  values: Record<string, unknown>,
-): Promise<ConnectionRow> {
-  const result = await client
-    .from("github_connections")
-    .update({ ...values, user_id: userId })
-    .eq("user_id", userId)
-    .eq("active_sync_id", syncId)
-    .select(CONNECTION_COLUMNS)
-    .maybeSingle();
-  if (result.error) throw result.error;
-  if (!result.data) throw new GitHubSyncError("conflict");
-  return result.data as ConnectionRow;
-}
-
-async function reconnectRequired(
-  client: AdminClient,
-  connection: ConnectionRow,
-  syncId: string,
-): Promise<GitHubSyncProgress> {
-  const updated = await guardedConnectionUpdate(
-    client,
-    connection.user_id,
-    syncId,
-    {
-      connection_status: "reconnect_required",
-      sync_status: "failed",
-      active_sync_id: null,
-      last_sync_error: RECONNECT_ERROR,
-    },
-  );
-  return terminalProgress("reconnect_required", updated);
-}
-
-async function failProviderSync(
-  client: AdminClient,
-  connection: ConnectionRow,
-  syncId: string,
-  kind: "rate_limited" | "unavailable",
-): Promise<never> {
-  const error = new GitHubSyncError(kind);
-  await guardedConnectionUpdate(client, connection.user_id, syncId, {
-    sync_status: "failed",
-    active_sync_id: null,
-    last_sync_error: error.message,
+  page: number,
+  leaseId: string,
+): Promise<void> {
+  const result = await client.rpc("claim_github_sync_page", {
+    p_user_id: userId,
+    p_sync_id: syncId,
+    p_page: page,
+    p_lease_id: leaseId,
   });
-  throw error;
+  if (result.error) throw result.error;
+  if (result.data !== true) throw new GitHubSyncError("conflict");
 }
 
-async function handleGitHubError(
+async function failPageLease(
+  client: AdminClient,
+  userId: string,
+  syncId: string,
+  leaseId: string | null,
+  error: string,
+  reconnectRequired: boolean,
+): Promise<boolean> {
+  const result = await client.rpc("fail_github_sync_page", {
+    p_user_id: userId,
+    p_sync_id: syncId,
+    p_lease_id: leaseId,
+    p_error: error,
+    p_reconnect_required: reconnectRequired,
+  });
+  if (result.error) throw result.error;
+  return result.data === true;
+}
+
+async function cleanUpFailure(
+  client: AdminClient,
+  userId: string,
+  syncId: string,
+  leaseId: string | null,
+  error: string,
+  reconnectRequired = false,
+): Promise<boolean> {
+  try {
+    return await failPageLease(
+      client,
+      userId,
+      syncId,
+      leaseId,
+      error,
+      reconnectRequired,
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function handlePageError(
   client: AdminClient,
   connection: ConnectionRow,
   syncId: string,
+  leaseId: string,
   error: unknown,
 ): Promise<GitHubSyncProgress> {
   if (
@@ -209,14 +229,48 @@ async function handleGitHubError(
     (error instanceof Error &&
       error.message === "GitHub needs to be reconnected.")
   ) {
-    return reconnectRequired(client, connection, syncId);
+    const cleaned = await cleanUpFailure(
+      client,
+      connection.user_id,
+      syncId,
+      leaseId,
+      RECONNECT_ERROR,
+      true,
+    );
+    if (!cleaned) throw new GitHubSyncError("conflict");
+    return terminalProgress("reconnect_required", connection);
   }
   if (error instanceof GitHubApiError && error.kind === "rate_limited") {
-    return failProviderSync(client, connection, syncId, "rate_limited");
+    const syncError = new GitHubSyncError("rate_limited");
+    const cleaned = await cleanUpFailure(
+      client,
+      connection.user_id,
+      syncId,
+      leaseId,
+      syncError.message,
+    );
+    if (!cleaned) throw new GitHubSyncError("conflict");
+    throw syncError;
   }
   if (error instanceof GitHubApiError && error.kind === "provider_error") {
-    return failProviderSync(client, connection, syncId, "unavailable");
+    const syncError = new GitHubSyncError("unavailable");
+    const cleaned = await cleanUpFailure(
+      client,
+      connection.user_id,
+      syncId,
+      leaseId,
+      syncError.message,
+    );
+    if (!cleaned) throw new GitHubSyncError("conflict");
+    throw syncError;
   }
+  await cleanUpFailure(
+    client,
+    connection.user_id,
+    syncId,
+    leaseId,
+    UNKNOWN_SYNC_ERROR,
+  );
   throw error;
 }
 
@@ -251,13 +305,24 @@ async function loadExistingItems(
   normalizedUrls: string[],
 ): Promise<ExistingSavedItem[]> {
   if (normalizedUrls.length === 0) return [];
-  const result = await client
-    .from("saved_items")
-    .select(SAVED_ITEM_COLUMNS)
-    .eq("user_id", userId)
-    .in("normalized_url", normalizedUrls);
-  if (result.error) throw result.error;
-  return (result.data ?? []) as ExistingSavedItem[];
+  const items: ExistingSavedItem[] = [];
+  for (
+    let index = 0;
+    index < normalizedUrls.length;
+    index += EXISTING_ITEM_CHUNK_SIZE
+  ) {
+    const result = await client
+      .from("saved_items")
+      .select(SAVED_ITEM_COLUMNS)
+      .eq("user_id", userId)
+      .in(
+        "normalized_url",
+        normalizedUrls.slice(index, index + EXISTING_ITEM_CHUNK_SIZE),
+      );
+    if (result.error) throw result.error;
+    items.push(...((result.data ?? []) as ExistingSavedItem[]));
+  }
+  return items;
 }
 
 function itemWithUserFields(
@@ -281,6 +346,7 @@ async function prepareSavedRow(
       embedding: existing.embedding,
       indexing_status: existing.indexing_status,
       indexing_error: existing.indexing_error,
+      expected_updated_at: existing.updated_at,
     };
   }
 
@@ -292,6 +358,7 @@ async function prepareSavedRow(
       embedding: embedded.embedding,
       indexing_status: embedded.embedding ? "ready" : "keyword_only",
       indexing_error: embedded.embedding ? null : INDEXING_ERROR,
+      expected_updated_at: existing?.updated_at ?? null,
     };
   } catch {
     return {
@@ -300,6 +367,7 @@ async function prepareSavedRow(
       embedding: null,
       indexing_status: "keyword_only",
       indexing_error: INDEXING_ERROR,
+      expected_updated_at: existing?.updated_at ?? null,
     };
   }
 }
@@ -309,7 +377,13 @@ async function processPage(
   userId: string,
   syncId: string,
 ): Promise<GitHubSyncProgress> {
-  const connection = await loadConnection(client, userId);
+  let connection: ConnectionRow | null;
+  try {
+    connection = await loadConnection(client, userId);
+  } catch (error) {
+    await cleanUpFailure(client, userId, syncId, null, UNKNOWN_SYNC_ERROR);
+    throw error;
+  }
   if (!connection) return terminalProgress("not_connected", null);
   if (connection.connection_status === "reconnect_required") {
     return terminalProgress("reconnect_required", connection);
@@ -321,79 +395,79 @@ async function processPage(
     throw new GitHubSyncError("conflict");
   }
 
-  let accessToken: string;
+  const page = connection.next_page;
+  const leaseId = randomUUID();
   try {
-    accessToken = await getValidGitHubAccessToken(userId);
+    await claimPageLease(client, userId, syncId, page, leaseId);
   } catch (error) {
-    return handleGitHubError(client, connection, syncId, error);
-  }
-
-  let page: Awaited<ReturnType<typeof listStarredRepositoriesPage>>;
-  try {
-    page = await listStarredRepositoriesPage(accessToken, connection.next_page);
-  } catch (error) {
-    return handleGitHubError(client, connection, syncId, error);
-  }
-
-  const mapped = mapRepositories(page.repositories);
-  const existingItems = await loadExistingItems(
-    client,
-    userId,
-    mapped.items.map((item) => item.normalized_url),
-  );
-  const existingByUrl = new Map(
-    existingItems.map((item) => [item.normalized_url, item]),
-  );
-  const rows = await mapWithConcurrency(
-    mapped.items,
-    EMBEDDING_CONCURRENCY,
-    (item) =>
-      prepareSavedRow(userId, item, existingByUrl.get(item.normalized_url)),
-  );
-
-  if (rows.length > 0) {
-    const saved = await client.from("saved_items").upsert(rows, {
-      onConflict: "user_id,normalized_url",
-    });
-    if (saved.error) throw saved.error;
-  }
-
-  const nextCounts: SyncCounts = {
-    discoveredCount: connection.discovered_count + page.repositories.length,
-    savedCount:
-      connection.saved_count +
-      mapped.items.filter((item) => !existingByUrl.has(item.normalized_url))
-        .length,
-    skippedCount: connection.skipped_count + mapped.skippedCount,
-  };
-  const databaseCounts = {
-    discovered_count: nextCounts.discoveredCount,
-    saved_count: nextCounts.savedCount,
-    skipped_count: nextCounts.skippedCount,
-  };
-
-  if (page.nextPage !== null) {
-    await guardedConnectionUpdate(client, userId, syncId, {
-      ...databaseCounts,
-      next_page: page.nextPage,
-      last_sync_error: null,
-    });
-    return {
-      status: "running",
+    if (error instanceof GitHubSyncError && error.kind === "conflict") {
+      throw error;
+    }
+    const cleaned = await cleanUpFailure(
+      client,
+      userId,
       syncId,
-      nextPage: page.nextPage,
-      ...nextCounts,
-    };
+      leaseId,
+      UNKNOWN_SYNC_ERROR,
+    );
+    if (!cleaned) {
+      await cleanUpFailure(client, userId, syncId, null, UNKNOWN_SYNC_ERROR);
+    }
+    throw error;
   }
 
-  await guardedConnectionUpdate(client, userId, syncId, {
-    ...databaseCounts,
-    sync_status: "idle",
-    active_sync_id: null,
-    last_synced_at: new Date().toISOString(),
-    last_sync_error: null,
-  });
-  return { status: "complete", ...nextCounts };
+  try {
+    const accessToken = await getValidGitHubAccessToken(userId);
+    const providerPage = await listStarredRepositoriesPage(accessToken, page);
+    const mapped = mapRepositories(providerPage.repositories);
+    const existingItems = await loadExistingItems(
+      client,
+      userId,
+      mapped.items.map((item) => item.normalized_url),
+    );
+    const existingByUrl = new Map(
+      existingItems.map((item) => [item.normalized_url, item]),
+    );
+    const rows = await mapWithConcurrency(
+      mapped.items,
+      EMBEDDING_CONCURRENCY,
+      (item) =>
+        prepareSavedRow(userId, item, existingByUrl.get(item.normalized_url)),
+    );
+    const applied = await client.rpc("apply_github_sync_page", {
+      p_user_id: userId,
+      p_sync_id: syncId,
+      p_lease_id: leaseId,
+      p_page: page,
+      p_next_page: providerPage.nextPage,
+      p_discovered_count: providerPage.repositories.length,
+      p_skipped_count: mapped.skippedCount,
+      p_items: rows,
+    });
+    if (applied.error) throw applied.error;
+    if (!applied.data) throw new GitHubSyncError("conflict");
+
+    const result = applied.data as AppliedPage;
+    const resultCounts: SyncCounts = {
+      discoveredCount: result.discovered_count,
+      savedCount: result.saved_count,
+      skippedCount: result.skipped_count,
+    };
+    if (result.status === "running" && result.next_page !== null) {
+      return {
+        status: "running",
+        syncId,
+        nextPage: result.next_page,
+        ...resultCounts,
+      };
+    }
+    if (result.status === "complete" && result.next_page === null) {
+      return { status: "complete", ...resultCounts };
+    }
+    throw new Error("GitHub sync returned invalid progress.");
+  } catch (error) {
+    return handlePageError(client, connection, syncId, leaseId, error);
+  }
 }
 
 export async function startGitHubSync(
@@ -405,7 +479,10 @@ export async function startGitHubSync(
     p_user_id: userId,
     p_sync_id: syncId,
   });
-  if (result.error) throw result.error;
+  if (result.error) {
+    await cleanUpFailure(client, userId, syncId, null, UNKNOWN_SYNC_ERROR);
+    throw result.error;
+  }
   if (!result.data)
     return progressForConnection(await loadConnection(client, userId));
   return processPage(client, userId, syncId);
