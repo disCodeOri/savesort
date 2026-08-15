@@ -107,4 +107,60 @@ describe("mergeGitHubProviderItem", () => {
       "Content: Existing README excerpt",
     );
   });
+
+  it.each([
+    ["absent", {}],
+    ["null", { github: null }],
+    ["string", { github: "legacy" }],
+    ["array", { github: [] }],
+    ["malformed provider tags", { github: { providerTags: "search" } }],
+    ["non-string provider tags", { github: { providerTags: [42, null] } }],
+  ])("retains user tags for %s GitHub metadata", (_shape, metadata) => {
+    const provider = mapGitHubStar(starredRepository());
+    const merged = mergeGitHubProviderItem(
+      {
+        url: provider.url,
+        normalized_url: provider.normalized_url,
+        title: "old title",
+        description: "old description",
+        notes: null,
+        content: null,
+        author: "acme",
+        thumbnail_url: null,
+        tags: ["personal", "search"],
+        metadata,
+      },
+      provider,
+    );
+
+    expect(merged.tags).toEqual(["personal", "search", "TypeScript"]);
+  });
+
+  it("retains unrelated metadata and a populated thumbnail while refreshing GitHub metadata", () => {
+    const provider = mapGitHubStar(starredRepository());
+    const merged = mergeGitHubProviderItem(
+      {
+        url: provider.url,
+        normalized_url: provider.normalized_url,
+        title: "old title",
+        description: "old description",
+        notes: null,
+        content: null,
+        author: "acme",
+        thumbnail_url: "https://cdn.example/thumb.png",
+        tags: ["personal"],
+        metadata: {
+          canonicalUrl: "https://acme.example/find-it",
+          custom: { pinned: true },
+          github: { providerTags: ["old-provider-topic"] },
+        },
+      },
+      provider,
+    );
+
+    expect(merged.thumbnail_url).toBe("https://cdn.example/thumb.png");
+    expect(merged.metadata.canonicalUrl).toBe("https://acme.example/find-it");
+    expect(merged.metadata.custom).toEqual({ pinned: true });
+    expect(merged.metadata.github).toEqual(provider.metadata.github);
+  });
 });
