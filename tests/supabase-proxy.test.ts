@@ -33,7 +33,11 @@ describe("updateSession", () => {
               options: { path: "/", sameSite: "lax", maxAge: 34_560_000 },
             },
           ],
-          new Headers({ "x-supabase-auth": "refreshed" }),
+          {
+            "Cache-Control": "private, no-cache, no-store, must-revalidate, max-age=0",
+            Expires: "0",
+            Pragma: "no-cache",
+          },
         );
         return { data: { claims: { sub: "user-1" } }, error: null };
       });
@@ -45,6 +49,10 @@ describe("updateSession", () => {
 
     expect(getClaims).toHaveBeenCalledOnce();
     expect(response.cookies.get("sb-session")?.value).toBe("refreshed");
-    expect(response.headers.get("x-supabase-auth")).toBe("refreshed");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-cache, no-store, must-revalidate, max-age=0",
+    );
+    expect(response.headers.get("Expires")).toBe("0");
+    expect(response.headers.get("Pragma")).toBe("no-cache");
   });
 });
