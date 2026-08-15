@@ -11,3 +11,23 @@ export function getSupabasePublicConfig(): {
   }
   return { url, publishableKey };
 }
+
+export interface GitHubServerConfig {
+  clientId: string;
+  clientSecret: string;
+  encryptionKey: string;
+  supabaseSecretKey: string;
+}
+
+export function getGitHubServerConfig(): GitHubServerConfig {
+  const config = {
+    clientId: process.env.GITHUB_APP_CLIENT_ID,
+    clientSecret: process.env.GITHUB_APP_CLIENT_SECRET,
+    encryptionKey: process.env.GITHUB_TOKEN_ENCRYPTION_KEY,
+    supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
+  };
+  if (Object.values(config).some((value) => !value)) {
+    throw new Error("GitHub connection is not configured.");
+  }
+  return config as GitHubServerConfig;
+}
