@@ -9,6 +9,7 @@ import {
 
 const ENCRYPTION_VERSION = "v1";
 const IV_LENGTH = 12;
+const AUTH_TAG_LENGTH = 16;
 
 function toBase64Url(value: Buffer): string {
   return value.toString("base64url");
@@ -72,12 +73,19 @@ export function decryptSecret(value: string): string {
       throw new Error("Invalid encrypted credential.");
     }
 
+    const iv = Buffer.from(encodedIv, "base64url");
+    const tag = Buffer.from(encodedTag, "base64url");
+    if (iv.length !== IV_LENGTH || tag.length !== AUTH_TAG_LENGTH) {
+      throw new Error("Invalid encrypted credential.");
+    }
+
     const decipher = createDecipheriv(
       "aes-256-gcm",
       key,
-      Buffer.from(encodedIv, "base64url"),
+      iv,
+      { authTagLength: AUTH_TAG_LENGTH },
     );
-    decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
+    decipher.setAuthTag(tag);
     return Buffer.concat([
       decipher.update(Buffer.from(encodedCiphertext, "base64url")),
       decipher.final(),
