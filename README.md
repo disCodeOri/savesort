@@ -99,6 +99,25 @@ If the key is absent, invalid, or rate-limited, items are saved as `keyword_only
 
 The app indexes repository identity, description, topics, language, stars, homepage, owner, and a bounded README excerpt. It never clones or indexes source code.
 
+### GitHub App account sync setup
+
+To import the repositories starred by a signed-in user, create a GitHub App owned by your account. Use the SaveSort origin (for example, `http://localhost:3000`) as its homepage URL and set its **User authorization callback URL** to `<origin>/api/github/callback`. Under **Account permissions**, set **Starring** to **Read-only**; leave repository write permissions disabled.
+
+Copy the App client ID and client secret to `.env.local`, then generate the token-encryption key and add the server-only Supabase secret key:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+```text
+GITHUB_APP_CLIENT_ID=             # GitHub App client ID
+GITHUB_APP_CLIENT_SECRET=         # GitHub App client secret
+GITHUB_TOKEN_ENCRYPTION_KEY=      # generated command output
+SUPABASE_SECRET_KEY=              # Supabase server-side secret key
+```
+
+Store the generated value only in `GITHUB_TOKEN_ENCRYPTION_KEY`. Never commit `.env.local`, and restart Next.js after changing environment variables. Revoking the GitHub App authorization only makes SaveSort request a reconnection; it does not sign the user out of SaveSort.
+
 ## Environment variables
 
 ```text
@@ -107,9 +126,13 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= # required
 NEXT_PUBLIC_SITE_URL=http://localhost:3000 # recommended
 GEMINI_API_KEY=                    # recommended for semantic search
 GITHUB_TOKEN=                      # optional
+GITHUB_APP_CLIENT_ID=               # required for GitHub account sync
+GITHUB_APP_CLIENT_SECRET=           # required for GitHub account sync, server-only
+GITHUB_TOKEN_ENCRYPTION_KEY=        # required for GitHub account sync, server-only
+SUPABASE_SECRET_KEY=                # required for GitHub account sync, server-only
 ```
 
-No service-role or Supabase secret key is required.
+Do not expose server-only values through a `NEXT_PUBLIC_` variable.
 
 ## Running locally
 
@@ -143,7 +166,8 @@ npm run build
 3. Add the environment variables above to the Vercel project.
 4. Set `NEXT_PUBLIC_SITE_URL` to the production origin.
 5. Add the production origin and callback URL to Supabase Auth URL Configuration.
-6. Run `npx supabase db push` against the linked production Supabase project before first use.
+6. Configure the GitHub App homepage and user authorization callback as described above, using the production origin.
+7. Run `npx supabase db push` against the linked production Supabase project before first use.
 
 Do not deploy from this repository with a service-role key or with a credential that has appeared in chat.
 
@@ -153,8 +177,8 @@ Do not deploy from this repository with a service-role key or with a credential 
 - Generic HTML extraction is intentionally conservative and does not run JavaScript or crawl linked pages.
 - Semantic quality depends on the configured Gemini embedding model and available API quota.
 - Database/RLS integration checks require a configured Supabase project; unit tests cover deterministic local logic.
-- There is no browser extension, mobile app, account import, background queue, folder system, chat assistant, billing, or team workspace.
+- There is no browser extension, mobile app, background queue, folder system, chat assistant, billing, or team workspace.
 
 ## Future architecture
 
-Plausible later additions are a browser extension, mobile share sheet, GitHub OAuth star import, user-assisted social export/import, YouTube integration, automated tagging, improved duplicate detection, and evaluated reranking. None are part of this MVP.
+Plausible later additions are a browser extension, mobile share sheet, user-assisted social export/import, YouTube integration, automated tagging, improved duplicate detection, and evaluated reranking. None are part of this MVP.
