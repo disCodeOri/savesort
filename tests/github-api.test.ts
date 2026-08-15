@@ -142,8 +142,17 @@ describe("GitHub API client", () => {
       expect.objectContaining({
         method: "POST",
         body: expect.any(URLSearchParams),
+        headers: expect.objectContaining({
+          "Content-Type": "application/x-www-form-urlencoded",
+        }),
       }),
     );
+    const form = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(form.get("client_id")).toBe("client-id");
+    expect(form.get("client_secret")).toBe("client-secret");
+    expect(form.get("code")).toBe("code-value");
+    expect(form.get("code_verifier")).toBe("verifier-value");
+    expect(form.get("redirect_uri")).toBe("https://app.test/callback");
   });
 
   it("refreshes an OAuth token", async () => {
@@ -162,8 +171,34 @@ describe("GitHub API client", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://github.com/login/oauth/access_token",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(URLSearchParams),
+        headers: expect.objectContaining({
+          "Content-Type": "application/x-www-form-urlencoded",
+        }),
+      }),
     );
+    const form = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(form.get("client_id")).toBe("client-id");
+    expect(form.get("client_secret")).toBe("client-secret");
+    expect(form.get("grant_type")).toBe("refresh_token");
+    expect(form.get("refresh_token")).toBe("ghr_old");
+  });
+
+  it("maps a missing OAuth configuration to a provider error", async () => {
+    delete process.env.GITHUB_APP_CLIENT_ID;
+
+    await expect(
+      exchangeOAuthCode(
+        "code-value",
+        "verifier-value",
+        "https://app.test/callback",
+      ),
+    ).rejects.toMatchObject({
+      kind: "provider_error",
+    } satisfies Partial<GitHubApiError>);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("gets the authenticated GitHub user", async () => {

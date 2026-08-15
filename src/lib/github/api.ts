@@ -193,12 +193,20 @@ async function requestToken(form: URLSearchParams): Promise<GitHubOAuthToken> {
   return token;
 }
 
+function getOAuthConfig() {
+  try {
+    return getGitHubServerConfig();
+  } catch {
+    throw new GitHubApiError("provider_error");
+  }
+}
+
 export async function exchangeOAuthCode(
   code: string,
   verifier: string,
   redirectUri: string,
 ): Promise<GitHubOAuthToken> {
-  const config = getGitHubServerConfig();
+  const config = getOAuthConfig();
   return requestToken(
     new URLSearchParams({
       client_id: config.clientId,
@@ -213,7 +221,7 @@ export async function exchangeOAuthCode(
 export async function refreshOAuthToken(
   refreshToken: string,
 ): Promise<GitHubOAuthToken> {
-  const config = getGitHubServerConfig();
+  const config = getOAuthConfig();
   return requestToken(
     new URLSearchParams({
       client_id: config.clientId,
