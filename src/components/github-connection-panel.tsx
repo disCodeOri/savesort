@@ -75,12 +75,14 @@ export function GitHubConnectionPanel({
     }
 
     void loadConnection();
+    window.addEventListener("savesort:changed", loadConnection);
+    return () => window.removeEventListener("savesort:changed", loadConnection);
   }, []);
 
   const reconnectRequired =
     connection?.connectionStatus === "reconnect_required";
   const isConnected = connection?.connected && !reconnectRequired;
-  const isSyncing = syncing || connection?.syncStatus === "running";
+  const isSyncing = connection?.syncStatus === "running" || syncing;
   const lastSyncedAt = formatLastSyncedAt(connection?.lastSyncedAt ?? null);
 
   async function syncNow() {
@@ -169,7 +171,7 @@ export function GitHubConnectionPanel({
             <button
               className="button button-primary"
               type="button"
-              disabled={isSyncing}
+              disabled={syncing}
               onClick={() => void syncNow()}
             >
               Sync now

@@ -81,6 +81,52 @@ describe("GitHubConnectionPanel", () => {
     expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled();
   });
 
+  it("refreshes its connection status when the library changes", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          connection: { ...connectedConnection, syncStatus: "running" },
+        }),
+      )
+      .mockResolvedValueOnce(response({ connection: connectedConnection }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPanel();
+
+    expect(
+      await screen.findByText("Syncing GitHub stars…"),
+    ).toBeInTheDocument();
+    window.dispatchEvent(new Event("savesort:changed"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled();
+    expect(screen.queryByText("Syncing GitHub stars…")).not.toBeInTheDocument();
+  });
+
+  it("allows manual recovery from a persisted running sync", async () => {
+    mocks.runGitHubSync.mockImplementation(() => new Promise(() => undefined));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response({
+          connection: { ...connectedConnection, syncStatus: "running" },
+        }),
+      ),
+    );
+
+    renderPanel();
+
+    const syncButton = await screen.findByRole("button", { name: "Sync now" });
+    expect(syncButton).toBeEnabled();
+    expect(screen.getByText("Syncing GitHub stars…")).toBeInTheDocument();
+
+    fireEvent.click(syncButton);
+
+    expect(mocks.runGitHubSync).toHaveBeenCalledTimes(1);
+    expect(syncButton).toBeDisabled();
+  });
+
   it("disables manual sync and announces progress while syncing", async () => {
     mocks.runGitHubSync.mockImplementation(() => new Promise(() => undefined));
     vi.stubGlobal(
