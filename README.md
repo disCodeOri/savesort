@@ -27,7 +27,7 @@ Search query
   → private result cards
 ```
 
-The application is one Next.js App Router project. Route Handlers do server-only enrichment and embedding work. Supabase SSR keeps the user session in cookies. Every data request uses the current user’s Supabase client, and Row Level Security is the final authorization boundary—there is no service-role client in this app.
+The application is one Next.js App Router project. Route Handlers do server-only enrichment and embedding work. Supabase SSR keeps the user session in cookies. User-facing data requests use the current user’s Supabase client, and Row Level Security is the final authorization boundary. GitHub connection and sync work uses a narrowly scoped server-only admin client for encrypted credentials; it is never browser-exposed.
 
 If Gemini is unavailable, saving still works and PostgreSQL keyword search remains available.
 
@@ -169,7 +169,7 @@ npm run build
 6. Configure the GitHub App homepage and user authorization callback as described above, using the production origin.
 7. Run `npx supabase db push` against the linked production Supabase project before first use.
 
-Do not deploy from this repository with a service-role key or with a credential that has appeared in chat.
+Never expose a server-only key through `NEXT_PUBLIC_`. If any credential has appeared in chat, an issue, a terminal recording, or a public file, revoke and replace it before deploying.
 
 ## Current limitations
 
