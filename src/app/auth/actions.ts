@@ -58,8 +58,30 @@ export async function signUpAction(formData: FormData) {
   );
 }
 
+export async function signInWithGoogleAction() {
+  const requestHeaders = await headers();
+  const origin =
+    requestHeaders.get("origin") ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "http://localhost:3000";
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/callback?next=/search?githubSync=login`,
+    },
+  });
+  if (error) {
+    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+  if (data.url) {
+    redirect(data.url);
+  }
+}
+
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
 }
+
