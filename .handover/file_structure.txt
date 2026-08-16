@@ -1,0 +1,161 @@
+├── savesort
+│   ├── .env.example
+│   ├── .env.local
+│   ├── .handover
+│   │   ├── collation-engine.py
+│   │   ├── file_structure.txt
+│   ├── .prettierignore
+│   ├── .worktrees
+│   ├── AGENTS.md
+│   ├── Prompt — Refocus MVP Around Saved Knowledge Search.md
+│   ├── README.md
+│   ├── docs
+│   │   ├── superpowers
+│   │   │   ├── plans
+│   │   │   │   ├── 2026-08-14-universal-saved-items-search.md
+│   │   │   │   ├── 2026-08-15-github-account-sync.md
+│   │   │   │   ├── 2026-08-15-persistent-supabase-sessions.md
+│   │   │   ├── specs
+│   │   │   │   ├── 2026-08-13-github-stars-search-design.md
+│   │   │   │   ├── 2026-08-14-universal-saved-items-search-design.md
+│   │   │   │   ├── 2026-08-15-github-account-sync-design.md
+│   │   │   │   ├── assets
+│   │   │   │   │   ├── savesort-desktop-concept.png
+│   │   │   │   │   ├── savesort-mobile-concept.png
+│   ├── eslint.config.mjs
+│   ├── mvp-saved-knowledge-search.md
+│   ├── next-env.d.ts
+│   ├── next.config.ts
+│   ├── package.json
+│   ├── postcss.config.mjs
+│   ├── product-roadmap.md
+│   ├── project_mvp_description(1).md
+│   ├── spec.md
+│   ├── src
+│   │   ├── app
+│   │   │   ├── (app)
+│   │   │   │   ├── error.tsx
+│   │   │   │   ├── item
+│   │   │   │   │   ├── [id]
+│   │   │   │   │   │   ├── page.tsx
+│   │   │   │   ├── layout.tsx
+│   │   │   │   ├── library
+│   │   │   │   │   ├── page.tsx
+│   │   │   │   ├── loading.tsx
+│   │   │   │   ├── search
+│   │   │   │   │   ├── page.tsx
+│   │   │   ├── api
+│   │   │   │   ├── github
+│   │   │   │   │   ├── callback
+│   │   │   │   │   │   ├── route.ts
+│   │   │   │   │   ├── connect
+│   │   │   │   │   │   ├── route.ts
+│   │   │   │   │   ├── connection
+│   │   │   │   │   │   ├── route.ts
+│   │   │   │   │   ├── sync
+│   │   │   │   │   │   ├── route.ts
+│   │   │   │   ├── items
+│   │   │   │   │   ├── [id]
+│   │   │   │   │   │   ├── retry
+│   │   │   │   │   │   │   ├── route.ts
+│   │   │   │   │   │   ├── route.ts
+│   │   │   │   │   ├── route.ts
+│   │   │   │   ├── search
+│   │   │   │   │   ├── route.ts
+│   │   │   ├── auth
+│   │   │   │   ├── actions.ts
+│   │   │   │   ├── callback
+│   │   │   │   │   ├── route.ts
+│   │   │   ├── globals.css
+│   │   │   ├── layout.tsx
+│   │   │   ├── login
+│   │   │   │   ├── page.tsx
+│   │   │   ├── page.tsx
+│   │   ├── components
+│   │   │   ├── app-shell.tsx
+│   │   │   ├── edit-item-client.tsx
+│   │   │   ├── empty-state.tsx
+│   │   │   ├── github-auto-sync.tsx
+│   │   │   ├── github-connection-panel.tsx
+│   │   │   ├── library-client.tsx
+│   │   │   ├── result-card.tsx
+│   │   │   ├── save-sheet.tsx
+│   │   │   ├── search-client.tsx
+│   │   │   ├── source-filters.tsx
+│   │   │   ├── source-icon.tsx
+│   │   │   ├── submit-button.tsx
+│   │   ├── lib
+│   │   │   ├── auth
+│   │   │   │   ├── require-user.ts
+│   │   │   ├── embeddings
+│   │   │   │   ├── gemini.ts
+│   │   │   ├── env.ts
+│   │   │   ├── github
+│   │   │   │   ├── api.ts
+│   │   │   │   ├── concurrency.ts
+│   │   │   │   ├── connections.ts
+│   │   │   │   ├── crypto.ts
+│   │   │   │   ├── map-star.ts
+│   │   │   │   ├── oauth-cookies.ts
+│   │   │   │   ├── sync-client.ts
+│   │   │   │   ├── sync.ts
+│   │   │   │   ├── types.ts
+│   │   │   ├── http
+│   │   │   │   ├── responses.ts
+│   │   │   ├── ingestion
+│   │   │   │   ├── github.ts
+│   │   │   │   ├── ingest.ts
+│   │   │   │   ├── ssrf.ts
+│   │   │   │   ├── web.ts
+│   │   │   ├── items
+│   │   │   │   ├── schemas.ts
+│   │   │   │   ├── types.ts
+│   │   │   ├── search
+│   │   │   │   ├── ranking.ts
+│   │   │   │   ├── searchable-text.ts
+│   │   │   ├── sources
+│   │   │   │   ├── detect-source.ts
+│   │   │   ├── supabase
+│   │   │   │   ├── admin.ts
+│   │   │   │   ├── client.ts
+│   │   │   │   ├── proxy.ts
+│   │   │   │   ├── server.ts
+│   │   │   ├── urls
+│   │   │   │   ├── normalize.ts
+│   │   ├── proxy.ts
+│   ├── supabase
+│   │   ├── migrations
+│   │   │   ├── 20260814164913_create_saved_items.sql
+│   │   │   ├── 20260815122530_create_github_connections.sql
+│   │   │   ├── 20260815123314_restrict_github_connection_grants.sql
+│   │   │   ├── 20260815124148_reject_null_github_sync_ids.sql
+│   │   │   ├── 20260815153000_save_github_connection_atomically.sql
+│   │   │   ├── 20260815163107_harden_github_sync_page_leases.sql
+│   │   │   ├── 20260815171042_scope_github_sync_heartbeats.sql
+│   │   ├── tests
+│   │   │   ├── github_connections_verification.sql
+│   │   │   ├── saved_items_verification.sql
+│   ├── technical-architecture-blueprint.md
+│   ├── tests
+│   │   ├── github-api.test.ts
+│   │   ├── github-auto-sync.test.tsx
+│   │   ├── github-connection-panel.test.tsx
+│   │   ├── github-connections.test.ts
+│   │   ├── github-crypto.test.ts
+│   │   ├── github-map-star.test.ts
+│   │   ├── github-oauth-routes.test.ts
+│   │   ├── github-sync-client.test.ts
+│   │   ├── github-sync-route.test.ts
+│   │   ├── github-sync.test.ts
+│   │   ├── item-schemas.test.ts
+│   │   ├── ranking.test.ts
+│   │   ├── searchable-text.test.ts
+│   │   ├── setup.ts
+│   │   ├── sources.test.ts
+│   │   ├── ssrf.test.ts
+│   │   ├── supabase-proxy.test.ts
+│   │   ├── urls.test.ts
+│   │   ├── web-metadata.test.ts
+│   ├── tsconfig.json
+│   ├── tsconfig.tsbuildinfo
+│   ├── vitest.config.ts
