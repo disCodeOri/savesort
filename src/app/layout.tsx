@@ -3,9 +3,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SaveSort — Find what you saved",
+  title: "Grapplin — Snag any link. Recall with a whisper.",
   description:
-    "A private search engine for useful things you save across the internet.",
+    "A private hybrid search engine for everything you save across the internet. Ingest URLs, auto-sync GitHub stars, and search with exact keywords or vague thoughts.",
+  icons: {
+    icon: "/grapplin-logo.png",
+    apple: "/grapplin-logo.png",
+  },
 };
 
 export default function RootLayout({

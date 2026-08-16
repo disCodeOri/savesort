@@ -1,6 +1,7 @@
 "use client";
 
 import { Bookmark, LogOut, Menu, Plus, Search, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -23,10 +24,15 @@ export function AppShell({
   return (
     <div className="app-frame">
       <header className="topbar">
-        <Link className="brand" href="/search">
-          <span className="brand-mark">S</span>
-          <span>SaveSort</span>
-          <i aria-hidden="true">*</i>
+        <Link className="brand-logo-link" href="/search" aria-label="Grapplin home">
+          <Image
+            src="/grapplin-logo.png"
+            alt="Grapplin"
+            width={180}
+            height={90}
+            className="app-brand-logo"
+            priority
+          />
         </Link>
         <nav className="desktop-nav" aria-label="Primary navigation">
           <Link

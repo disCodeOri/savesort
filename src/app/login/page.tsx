@@ -1,4 +1,5 @@
 import { Bookmark, Search, Sparkles } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import {
@@ -17,10 +18,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <main className="login-page">
       <section className="login-story">
-        <Link className="brand brand-large" href="/" aria-label="SaveSort home">
-          <span className="brand-mark">S</span>
-          <span>SaveSort</span>
-          <i aria-hidden="true">*</i>
+        <Link className="brand-logo-link brand-large" href="/" aria-label="Grapplin home">
+          <Image
+            src="/grapplin-logo.png"
+            alt="Grapplin"
+            width={240}
+            height={120}
+            className="login-brand-logo"
+            priority
+          />
         </Link>
         <div>
           <h1>Find the thing you saved.</h1>
@@ -45,7 +51,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-card">
-          <span className="mobile-login-brand">SaveSort*</span>
+          <span className="mobile-login-brand">Grapplin*</span>
           <h2 id="login-title">Welcome back</h2>
           <p>Create an account or sign in with your email and password.</p>
           {params.error ? (
