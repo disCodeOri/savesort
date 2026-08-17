@@ -18,7 +18,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <main className="login-page">
       <section className="login-story">
-        <Link className="brand-logo-link brand-large" href="/" aria-label="Grapplin home">
+        <Link
+          className="brand-logo-link brand-large"
+          href="/"
+          aria-label="Grapplin home"
+        >
           <Image
             src="/grapplin-logo.png"
             alt="Grapplin"

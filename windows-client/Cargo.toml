@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["core", "src-tauri"]
+
+# `savesort-core` holds the whole sync engine and has no Tauri dependency, so
+# `cargo test -p savesort-core` verifies the engine in seconds without
+# building a webview.

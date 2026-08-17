@@ -118,6 +118,92 @@ SUPABASE_SECRET_KEY=              # Supabase server-side secret key
 
 Store the generated value only in `GITHUB_TOKEN_ENCRYPTION_KEY`. Never commit `.env.local`, and restart Next.js after changing environment variables. Revoking the GitHub App authorization only makes SaveSort request a reconnection; it does not sign the user out of SaveSort.
 
+## Reddit integration
+
+SaveSort imports the saved posts of the **signed-in user's own Reddit account**. Reddit keeps saved history private to the account that owns it, so there is no supported way to import another person's saves from a username. The flow is always: the user connects their account, SaveSort reads the username from `/api/v1/me`, and it pages through `/user/{username}/saved` with that user's own token.
+
+Saved comments are excluded (`type=links`), because a comment has no page for SaveSort to index. For each saved post the app stores the Reddit permalink, title, subreddit, flair, author, self-post text, and the outbound link. It never scrapes Reddit HTML and never reads another account's data.
+
+### Reddit app account sync setup
+
+Create an app at <https://www.reddit.com/prefs/apps> of type **web app**, and set its **redirect uri** to `<origin>/api/reddit/callback` (for example, `http://localhost:3000/api/reddit/callback`). SaveSort requests the `identity` and `history` scopes with `duration=permanent`; `history` is the scope Reddit defines as access to saved and hidden posts.
+
+Copy the app's client ID and secret into `.env.local` and generate a token-encryption key of its own:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+```text
+REDDIT_APP_CLIENT_ID=             # Reddit app client ID
+REDDIT_APP_CLIENT_SECRET=         # Reddit app secret
+REDDIT_TOKEN_ENCRYPTION_KEY=      # generated command output, separate from the GitHub key
+REDDIT_USER_AGENT=                # web:savesort:v0.1 (by /u/your_reddit_username)
+SUPABASE_SECRET_KEY=              # Supabase server-side secret key
+```
+
+Reddit requires a unique, descriptive `User-Agent` on every Data API request, so `REDDIT_USER_AGENT` has no default and the integration stays disabled until it is set. Reddit's Responsible Builder Policy also requires an approved access request before using the Data API, and a separate agreement for commercial use — confirm your app's approval before enabling this in production.
+
+Reddit does not promise an unbounded saved archive through this endpoint. SaveSort pages until Reddit stops returning a cursor, so a very large saved history may import fewer items than the account shows.
+
+## Obsidian vault sync
+
+The Windows desktop client in `windows-client/` mirrors a local Obsidian vault
+into SaveSort. Synced notes are ordinary `saved_items` rows with
+`source = 'obsidian'`, so they appear in the same hybrid search as everything
+else with no query changes.
+
+A note's identity is the **client-assigned file id**, not its vault path
+(`normalized_url` is `obsidian://note/<clientFileId>`), so renaming or moving a
+note updates the existing item instead of creating a duplicate. The `url` is an
+`obsidian://open?…` link that opens the note in Obsidian.
+
+### Desktop authentication
+
+The client is a public OAuth client with no embedded secret. It runs a loopback
+PKCE flow against `/desktop/authorize`, then exchanges the one-time code at
+`/api/desktop/token` for an opaque access token (1 hour) and refresh token
+(60 days, rotated single-use on every refresh). Only SHA-256 digests of those
+tokens are stored server-side.
+
+Device tokens are deliberately _not_ Supabase sessions: they can be revoked for
+one machine without ending browser sessions, and they cannot be used to change
+account credentials. `requireUser()` and the cookie-based browser auth are
+unchanged — the sync surface authenticates separately through
+`requireDesktopSession()`.
+
+### Sync endpoints
+
+All require `Authorization: Bearer <device access token>`.
+
+```text
+POST /api/sync/register      register or re-register a vault
+POST /api/sync/files/batch   upsert up to 25 Markdown notes
+POST /api/sync/delete        remove notes deleted locally
+POST /api/sync/move          record a rename or move
+GET  /api/sync/status        vault sync state and note count
+GET  /api/sync/changes       server note manifest for reconciliation
+```
+
+Batch endpoints always return a per-file result rather than failing wholesale,
+so a client can commit what succeeded and retry only what did not. An upload
+whose `contentHash` already matches the stored note returns `unchanged` without
+bumping the revision, which is what makes a retried upload safe after a crash or
+a lost response.
+
+### Conflicts
+
+Every note carries a revision. Clients send the `baseRevision` their upload was
+based on; if the server has since moved on, it returns `conflict` with its
+current hash and **does not overwrite**. The desktop client leaves the local file
+untouched and surfaces the conflict for the user to resolve.
+
+### Scope
+
+Markdown only. Attachments are deliberately excluded from v1 — there is no
+object storage configured in this project yet, so binary sync would require
+introducing Supabase Storage first.
+
 ## Environment variables
 
 ```text
@@ -129,7 +215,11 @@ GITHUB_TOKEN=                      # optional
 GITHUB_APP_CLIENT_ID=               # required for GitHub account sync
 GITHUB_APP_CLIENT_SECRET=           # required for GitHub account sync, server-only
 GITHUB_TOKEN_ENCRYPTION_KEY=        # required for GitHub account sync, server-only
-SUPABASE_SECRET_KEY=                # required for GitHub account sync, server-only
+REDDIT_APP_CLIENT_ID=               # required for Reddit account sync
+REDDIT_APP_CLIENT_SECRET=           # required for Reddit account sync, server-only
+REDDIT_TOKEN_ENCRYPTION_KEY=        # required for Reddit account sync, server-only
+REDDIT_USER_AGENT=                  # required for Reddit account sync
+SUPABASE_SECRET_KEY=                # required for GitHub and Reddit account sync, server-only
 ```
 
 Do not expose server-only values through a `NEXT_PUBLIC_` variable.

@@ -34,7 +34,8 @@ describe("updateSession", () => {
             },
           ],
           {
-            "Cache-Control": "private, no-cache, no-store, must-revalidate, max-age=0",
+            "Cache-Control":
+              "private, no-cache, no-store, must-revalidate, max-age=0",
             Expires: "0",
             Pragma: "no-cache",
           },

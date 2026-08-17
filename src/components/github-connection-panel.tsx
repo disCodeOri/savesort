@@ -140,17 +140,17 @@ export function GitHubConnectionPanel({
   if (!loaded) return null;
 
   return (
-    <section className="github-connection-panel" aria-label="GitHub connection">
+    <section className="connection-panel" aria-label="GitHub connection">
       {reconnectRequired ? (
-        <div className="github-connection-status">
+        <div className="connection-panel-status">
           <p>GitHub access expired. Reconnect to resume syncing.</p>
           <a className="button button-secondary" href="/api/github/connect">
             Reconnect GitHub
           </a>
         </div>
       ) : isConnected ? (
-        <div className="github-connection-status">
-          <div className="github-connection-account">
+        <div className="connection-panel-status">
+          <div className="connection-panel-account">
             {connection.githubAvatarUrl ? (
               // GitHub serves this remote avatar directly; width and height bound its layout.
               // eslint-disable-next-line @next/next/no-img-element
@@ -167,7 +167,7 @@ export function GitHubConnectionPanel({
               {lastSyncedAt ? <small>Last synced {lastSyncedAt}</small> : null}
             </div>
           </div>
-          <div className="github-connection-actions">
+          <div className="connection-panel-actions">
             <button
               className="button button-primary"
               type="button"
@@ -177,7 +177,7 @@ export function GitHubConnectionPanel({
               Sync now
             </button>
             <button
-              className="github-connection-disconnect"
+              className="connection-panel-disconnect"
               type="button"
               onClick={() => void disconnect()}
             >
@@ -186,7 +186,7 @@ export function GitHubConnectionPanel({
           </div>
         </div>
       ) : (
-        <div className="github-connection-status">
+        <div className="connection-panel-status">
           <p>Connect GitHub to keep your starred repositories searchable.</p>
           <a className="button button-secondary" href="/api/github/connect">
             Connect GitHub
@@ -194,7 +194,7 @@ export function GitHubConnectionPanel({
         </div>
       )}
       {isSyncing ? (
-        <p className="github-connection-progress" aria-live="polite">
+        <p className="connection-panel-progress" aria-live="polite">
           Syncing GitHub stars…
         </p>
       ) : null}

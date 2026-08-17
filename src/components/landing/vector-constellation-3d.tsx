@@ -15,16 +15,96 @@ interface Node3D {
 }
 
 const INITIAL_NODES: Node3D[] = [
-  { id: "1", label: "768-dim Vectors", category: "ai", x: 60, y: -40, z: 80, radius: 6 },
-  { id: "2", label: "pgvector HNSW", category: "db", x: 90, y: 30, z: 50, radius: 5 },
-  { id: "3", label: "yt-dlp Media CLI", category: "cli", x: -80, y: 70, z: 30, radius: 5 },
-  { id: "4", label: "tsvector GIN", category: "db", x: -40, y: -80, z: -40, radius: 5 },
-  { id: "5", label: "Reciprocal Rank Fusion", category: "ai", x: 20, y: 10, z: 100, radius: 7 },
-  { id: "6", label: "GitHub Star Auto-Sync", category: "sys", x: -90, y: -20, z: 60, radius: 5 },
-  { id: "7", label: "SSRF Zero-Trust Guard", category: "sys", x: -20, y: 90, z: -60, radius: 5 },
-  { id: "8", label: "React Motion Physics", category: "web", x: 70, y: -70, z: -30, radius: 5 },
-  { id: "9", label: "Rust Vector Engine", category: "cli", x: 100, y: -10, z: -70, radius: 5 },
-  { id: "10", label: "PostgreSQL RLS", category: "db", x: -60, y: -60, z: 70, radius: 6 },
+  {
+    id: "1",
+    label: "768-dim Vectors",
+    category: "ai",
+    x: 60,
+    y: -40,
+    z: 80,
+    radius: 6,
+  },
+  {
+    id: "2",
+    label: "pgvector HNSW",
+    category: "db",
+    x: 90,
+    y: 30,
+    z: 50,
+    radius: 5,
+  },
+  {
+    id: "3",
+    label: "yt-dlp Media CLI",
+    category: "cli",
+    x: -80,
+    y: 70,
+    z: 30,
+    radius: 5,
+  },
+  {
+    id: "4",
+    label: "tsvector GIN",
+    category: "db",
+    x: -40,
+    y: -80,
+    z: -40,
+    radius: 5,
+  },
+  {
+    id: "5",
+    label: "Reciprocal Rank Fusion",
+    category: "ai",
+    x: 20,
+    y: 10,
+    z: 100,
+    radius: 7,
+  },
+  {
+    id: "6",
+    label: "GitHub Star Auto-Sync",
+    category: "sys",
+    x: -90,
+    y: -20,
+    z: 60,
+    radius: 5,
+  },
+  {
+    id: "7",
+    label: "SSRF Zero-Trust Guard",
+    category: "sys",
+    x: -20,
+    y: 90,
+    z: -60,
+    radius: 5,
+  },
+  {
+    id: "8",
+    label: "React Motion Physics",
+    category: "web",
+    x: 70,
+    y: -70,
+    z: -30,
+    radius: 5,
+  },
+  {
+    id: "9",
+    label: "Rust Vector Engine",
+    category: "cli",
+    x: 100,
+    y: -10,
+    z: -70,
+    radius: 5,
+  },
+  {
+    id: "10",
+    label: "PostgreSQL RLS",
+    category: "db",
+    x: -60,
+    y: -60,
+    z: 70,
+    radius: 6,
+  },
 ];
 
 export function VectorConstellation3D() {
@@ -120,7 +200,8 @@ export function VectorConstellation3D() {
           const dist3D = Math.hypot(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z);
 
           if (dist3D < 130) {
-            const alpha = (1 - dist3D / 130) * 0.35 * Math.min(p1.scale, p2.scale);
+            const alpha =
+              (1 - dist3D / 130) * 0.35 * Math.min(p1.scale, p2.scale);
             ctx.strokeStyle = `rgba(105, 65, 198, ${alpha})`;
             ctx.beginPath();
             ctx.moveTo(p1.projX, p1.projY);
@@ -189,7 +270,9 @@ export function VectorConstellation3D() {
           <Sparkles size={13} />
           <span>768-Dimension Semantic Hyperspace</span>
         </div>
-        <span className="constellation-hint">Interactive 3D Cosine Cluster</span>
+        <span className="constellation-hint">
+          Interactive 3D Cosine Cluster
+        </span>
       </div>
 
       <div className="constellation-canvas-container">
@@ -198,11 +281,19 @@ export function VectorConstellation3D() {
 
       <div className="constellation-footer">
         <div className="constellation-legend">
-          <span className="legend-item"><span className="dot dot-ai" /> Gemini Vectors</span>
-          <span className="legend-item"><span className="dot dot-db" /> PostgreSQL HNSW</span>
-          <span className="legend-item"><span className="dot dot-sys" /> Zero-Trust Security</span>
+          <span className="legend-item">
+            <span className="dot dot-ai" /> Gemini Vectors
+          </span>
+          <span className="legend-item">
+            <span className="dot dot-db" /> PostgreSQL HNSW
+          </span>
+          <span className="legend-item">
+            <span className="dot dot-sys" /> Zero-Trust Security
+          </span>
         </div>
-        <span className="constellation-live-status">Cosine Angle: θ ≈ 0.04 rad</span>
+        <span className="constellation-live-status">
+          Cosine Angle: θ ≈ 0.04 rad
+        </span>
       </div>
     </div>
   );

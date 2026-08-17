@@ -71,7 +71,8 @@ const SAMPLE_DATABASE: SampleItem[] = [
     matchKeyword: 0.98,
     matchVector: 0.91,
     scoreRRF: 0.96,
-    highlightTerm: "Reciprocal Rank Fusion fuses lexical and semantic relevance",
+    highlightTerm:
+      "Reciprocal Rank Fusion fuses lexical and semantic relevance",
   },
   {
     id: "item-4",
@@ -122,9 +123,9 @@ const PRESET_QUERIES = [
 
 export function LandingHero() {
   const [searchQuery, setSearchQuery] = useState(PRESET_QUERIES[0].query);
-  const [searchMode, setSearchMode] = useState<"hybrid" | "semantic" | "keyword">(
-    "hybrid",
-  );
+  const [searchMode, setSearchMode] = useState<
+    "hybrid" | "semantic" | "keyword"
+  >("hybrid");
   const [heroView, setHeroView] = useState<"sandbox" | "hyperspace">("sandbox");
   const searchInputId = useId();
 
@@ -179,8 +180,9 @@ export function LandingHero() {
 
         <p className="landing-hero-subtitle hero-fade-in">
           A private, hybrid search engine for everything you save across the
-          internet. Ingest URLs in seconds, auto-sync GitHub stars, and rediscover
-          anything with exact keywords or vague thoughts in 768-dimensional space.
+          internet. Ingest URLs in seconds, auto-sync GitHub stars, and
+          rediscover anything with exact keywords or vague thoughts in
+          768-dimensional space.
         </p>
 
         <div className="landing-hero-cta-group hero-fade-in">
@@ -188,7 +190,10 @@ export function LandingHero() {
             <span>Start Grapplin&apos; Free</span>
             <ArrowRight size={18} />
           </Link>
-          <a href="#demo" className="button button-secondary hero-secondary-btn">
+          <a
+            href="#demo"
+            className="button button-secondary hero-secondary-btn"
+          >
             <Sparkles size={17} />
             <span>Explore 3D Sandbox</span>
           </a>
@@ -355,7 +360,9 @@ export function LandingHero() {
                         <div className="simulator-card-scores">
                           <span className="hybrid-badge">
                             <Zap size={12} />
-                            <span>{Math.round(item.finalScore * 100)}% match</span>
+                            <span>
+                              {Math.round(item.finalScore * 100)}% match
+                            </span>
                           </span>
                         </div>
                       </div>

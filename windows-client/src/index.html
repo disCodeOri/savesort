@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SaveSort Desktop</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <h1>SaveSort</h1>
+        <p class="status" id="status-line">Loading…</p>
+      </header>
+
+      <section class="panel" id="signed-out" hidden>
+        <p>Connect this computer to your SaveSort account to sync an Obsidian vault.</p>
+        <button class="primary" id="sign-in">Sign in</button>
+        <p class="hint">
+          Your browser opens for sign-in. This app never sees your password.
+        </p>
+      </section>
+
+      <section class="panel" id="signed-in" hidden>
+        <dl class="stats">
+          <div><dt>Vault</dt><dd id="vault-path">Not selected</dd></div>
+          <div><dt>Synced notes</dt><dd id="synced-count">0</dd></div>
+          <div><dt>Pending</dt><dd id="pending-count">0</dd></div>
+          <div><dt>Needs attention</dt><dd id="attention-count">0</dd></div>
+        </dl>
+
+        <div class="actions">
+          <button class="primary" id="choose-vault">Choose vault…</button>
+          <button id="sync-now">Sync now</button>
+          <button id="toggle-pause">Pause</button>
+        </div>
+
+        <div class="actions secondary">
+          <button id="open-logs">Open logs folder</button>
+          <button class="danger" id="sign-out">Sign out</button>
+        </div>
+      </section>
+
+      <p class="error" id="error" hidden></p>
+    </main>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

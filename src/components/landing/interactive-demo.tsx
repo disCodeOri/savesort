@@ -29,12 +29,14 @@ const PRELOADED_LINKS = [
     url: "https://github.com/astral-sh/uv",
     label: "astral-sh / uv (GitHub Repo)",
     type: "github",
-    title: "astral-sh/uv: An extremely fast Python package and project manager written in Rust",
+    title:
+      "astral-sh/uv: An extremely fast Python package and project manager written in Rust",
     summary:
       "A single binary replacing pip, pip-tools, virtualenv, and poetry. Built with Rust for 10-100x speedups, universal lockfiles, and workspace resolution.",
     topics: ["rust", "python", "package-manager", "cli", "fast"],
     vectorPreview: "[-0.041, 0.089, -0.012, 0.054, ... +764 dims]",
-    tsvector: "'astral':1 'fast':5 'packag':7 'pip':12 'python':6 'rust':11 'uv':2",
+    tsvector:
+      "'astral':1 'fast':5 'packag':7 'pip':12 'python':6 'rust':11 'uv':2",
   },
   {
     id: "link-2",
@@ -46,19 +48,22 @@ const PRELOADED_LINKS = [
       "Introduces a 7B parameter language model outperforming 13B models across all benchmarks, featuring Grouped-query attention (GQA) and Sliding Window Attention (SWA).",
     topics: ["ai", "transformers", "nlp", "llm", "research"],
     vectorPreview: "[0.072, -0.038, 0.091, -0.019, ... +764 dims]",
-    tsvector: "'attent':4 'benchmark':11 'llm':14 'mistral':1 'model':8 'transform':6",
+    tsvector:
+      "'attent':4 'benchmark':11 'llm':14 'mistral':1 'model':8 'transform':6",
   },
   {
     id: "link-3",
     url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     label: "Rick Astley - Never Gonna Give You Up (Video)",
     type: "video",
-    title: "Rick Astley - Never Gonna Give You Up (Official Music Video 4K Remaster)",
+    title:
+      "Rick Astley - Never Gonna Give You Up (Official Music Video 4K Remaster)",
     summary:
       "The official music video for Rick Astley’s 1987 global number one hit single, featuring 4K dynamic restoration and nostalgic 80s synth-pop production.",
     topics: ["music", "synth-pop", "classic", "youtube", "80s"],
     vectorPreview: "[0.018, -0.082, 0.044, 0.063, ... +764 dims]",
-    tsvector: "'1987':9 'astley':2 'music':6 'never':3 'rick':1 'synth-pop':14 'video':7",
+    tsvector:
+      "'1987':9 'astley':2 'music':6 'never':3 'rick':1 'synth-pop':14 'video':7",
   },
 ];
 
@@ -68,7 +73,7 @@ export function InteractiveDemo() {
   const [isGrappling, setIsGrappling] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState(3); // 0..3
 
-  const handleSimulateGrapple = (linkItem: typeof PRELOADED_LINKS[0]) => {
+  const handleSimulateGrapple = (linkItem: (typeof PRELOADED_LINKS)[0]) => {
     setSelectedLink(linkItem);
     setIsGrappling(true);
     setActiveStepIndex(0);
@@ -89,13 +94,23 @@ export function InteractiveDemo() {
     {
       title: "1. SSRF Guard & URL Validation",
       desc: "Validates protocol, resolves DNS, blocks private/loopback IPs, and verifies content-type.",
-      status: activeStepIndex > 0 ? "completed" : activeStepIndex === 0 ? "running" : "pending",
+      status:
+        activeStepIndex > 0
+          ? "completed"
+          : activeStepIndex === 0
+            ? "running"
+            : "pending",
       detail: `Checked DNS for ${new URL(selectedLink.url).hostname} • Status: 200 OK (Public IPv4 Verified)`,
     },
     {
       title: "2. Safe Metadata & README Extraction",
       desc: "Fetches OpenGraph title, tags, description, and capped README excerpts without running untrusted scripts.",
-      status: activeStepIndex > 1 ? "completed" : activeStepIndex === 1 ? "running" : "pending",
+      status:
+        activeStepIndex > 1
+          ? "completed"
+          : activeStepIndex === 1
+            ? "running"
+            : "pending",
       detail: `Extracted ${selectedLink.topics.length} tags • Length: ${selectedLink.summary.length} chars`,
     },
     {
@@ -107,7 +122,11 @@ export function InteractiveDemo() {
   ];
 
   return (
-    <section className="interactive-demo-section" id="pipeline-demo" aria-labelledby="pipeline-heading">
+    <section
+      className="interactive-demo-section"
+      id="pipeline-demo"
+      aria-labelledby="pipeline-heading"
+    >
       <div className="section-header">
         <div className="landing-badge">
           <Cpu size={13} />
@@ -117,9 +136,9 @@ export function InteractiveDemo() {
           How Grapplin digests any URL in 1.2 seconds
         </h2>
         <p className="section-subtitle">
-          Watch the zero-trust ingestion pipeline normalize external content, block
-          SSRF vulnerabilities, extract rich metadata, and build 768-dimension
-          semantic representations.
+          Watch the zero-trust ingestion pipeline normalize external content,
+          block SSRF vulnerabilities, extract rich metadata, and build
+          768-dimension semantic representations.
         </p>
       </div>
 
@@ -184,7 +203,11 @@ export function InteractiveDemo() {
                 disabled={!customUrl || isGrappling}
                 className="button button-accent custom-grapple-btn"
               >
-                {isGrappling ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} />}
+                {isGrappling ? (
+                  <RefreshCw size={14} className="spin" />
+                ) : (
+                  <Sparkles size={14} />
+                )}
                 <span>Grapple</span>
               </button>
             </div>
@@ -195,7 +218,9 @@ export function InteractiveDemo() {
         <div className="demo-right-panel">
           <div className="pipeline-steps-wrapper">
             <div className="pipeline-header-row">
-              <span className="pipeline-header-title">Live Ingestion Inspector</span>
+              <span className="pipeline-header-title">
+                Live Ingestion Inspector
+              </span>
               <span className="pipeline-security-tag">
                 <ShieldCheck size={13} />
                 <span>Zero-Trust SSRF Shield Active</span>
@@ -239,7 +264,9 @@ export function InteractiveDemo() {
             {/* Ingestion Stored Result Preview */}
             <div className="pipeline-output-preview">
               <div className="output-header">
-                <span className="output-label">Final Stored Searchable Record</span>
+                <span className="output-label">
+                  Final Stored Searchable Record
+                </span>
                 <span className="output-rls-badge">
                   <Lock size={12} />
                   <span>RLS Protected (auth.uid = owner)</span>

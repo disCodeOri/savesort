@@ -13,6 +13,10 @@ import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { GitHubConnectionPanel } from "@/components/github-connection-panel";
+import { RedditConnectionPanel } from "@/components/reddit-connection-panel";
+import { ItemDetailModal } from "@/components/item-detail-modal";
+import { MobileMemoryCard } from "@/components/mobile/mobile-memory-card";
+import { MobileMemoryRail } from "@/components/mobile/mobile-memory-rail";
 import { ResultCard } from "@/components/result-card";
 import { SourceFilters, type VisibleSource } from "@/components/source-filters";
 import type { SavedItem } from "@/lib/items/types";
@@ -24,6 +28,15 @@ export function LibraryClient() {
   const [error, setError] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 640);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -98,57 +111,85 @@ export function LibraryClient() {
         </div>
         <span>{items.length} saved</span>
       </div>
+
       <GitHubConnectionPanel
         onLibraryChanged={() => setRevision((value) => value + 1)}
       />
-      <SourceFilters value={source} onChange={setSource} />
+
+      <RedditConnectionPanel
+        onLibraryChanged={() => setRevision((value) => value + 1)}
+      />
+
+      {isMobile ? (
+        <MobileMemoryRail value={source} onChange={setSource} />
+      ) : (
+        <SourceFilters value={source} onChange={setSource} />
+      )}
+
       {loading ? (
         <div className="loading-state">
           <LoaderCircle className="spin" /> Loading your library…
         </div>
       ) : null}
+
       {error ? <div className="notice notice-error">{error}</div> : null}
+
       {!loading && !error && !items.length ? <EmptyState /> : null}
+
       <div className="results-list library-list">
-        {items.map((item) => (
-          <ResultCard
-            key={item.id}
-            item={item}
-            actions={
-              <div className="item-menu-wrap">
-                <button
-                  className="icon-button"
-                  aria-label={`Actions for ${item.title}`}
-                  onClick={() =>
-                    setOpenMenu(openMenu === item.id ? null : item.id)
-                  }
-                >
-                  <MoreHorizontal />
-                </button>
-                {openMenu === item.id ? (
-                  <div className="item-menu">
-                    <Link href={`/item/${item.id}`}>
-                      <Pencil /> Edit
-                    </Link>
-                    <button onClick={() => void retry(item.id)}>
-                      <RefreshCw /> Retry indexing
-                    </button>
-                    <a href={item.url} target="_blank" rel="noreferrer">
-                      <ExternalLink /> Open original
-                    </a>
-                    <button
-                      className="danger"
-                      onClick={() => void remove(item)}
-                    >
-                      <Trash2 /> Delete
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            }
-          />
-        ))}
+        {items.map((item) => {
+          const actionMenu = (
+            <div className="item-menu-wrap">
+              <button
+                className="icon-button"
+                aria-label={`Actions for ${item.title}`}
+                onClick={() =>
+                  setOpenMenu(openMenu === item.id ? null : item.id)
+                }
+              >
+                <MoreHorizontal />
+              </button>
+              {openMenu === item.id ? (
+                <div className="item-menu">
+                  <Link href={`/item/${item.id}`}>
+                    <Pencil /> Edit
+                  </Link>
+                  <button onClick={() => void retry(item.id)}>
+                    <RefreshCw /> Retry indexing
+                  </button>
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    <ExternalLink /> Open original
+                  </a>
+                  <button className="danger" onClick={() => void remove(item)}>
+                    <Trash2 /> Delete
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          );
+
+          return isMobile ? (
+            <MobileMemoryCard
+              key={item.id}
+              item={item}
+              actions={actionMenu}
+              onSelect={(selected) => setSelectedItem(selected)}
+            />
+          ) : (
+            <ResultCard
+              key={item.id}
+              item={item}
+              actions={actionMenu}
+              onSelect={(selected) => setSelectedItem(selected)}
+            />
+          );
+        })}
       </div>
+
+      <ItemDetailModal
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+      />
     </main>
   );
 }

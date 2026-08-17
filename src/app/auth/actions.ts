@@ -11,6 +11,9 @@ const credentialsSchema = z.object({
   password: z.string().min(8, "Use at least 8 characters for your password."),
 });
 
+/** Signing in resumes each connected provider's sync from the search page. */
+const SIGNED_IN_DESTINATION = "/search?githubSync=login&redditSync=login";
+
 function credentials(formData: FormData) {
   return credentialsSchema.safeParse({
     email: formData.get("email"),
@@ -31,7 +34,7 @@ export async function signInAction(formData: FormData) {
     redirect(
       `/login?error=${encodeURIComponent("Email or password wasn't recognized.")}`,
     );
-  redirect("/search?githubSync=login");
+  redirect(SIGNED_IN_DESTINATION);
 }
 
 export async function signUpAction(formData: FormData) {
@@ -68,7 +71,7 @@ export async function signInWithGoogleAction() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${origin}/auth/callback?next=/search?githubSync=login`,
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(SIGNED_IN_DESTINATION)}`,
     },
   });
   if (error) {
@@ -84,4 +87,3 @@ export async function signOutAction() {
   await supabase.auth.signOut();
   redirect("/login");
 }
-

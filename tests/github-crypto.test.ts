@@ -33,9 +33,8 @@ describe("GitHub secret protection", () => {
   });
 
   it("rejects a ciphertext with a truncated authentication tag", () => {
-    const [version, iv, tag, ciphertext] = encryptSecret("ghu_test_token").split(
-      ".",
-    );
+    const [version, iv, tag, ciphertext] =
+      encryptSecret("ghu_test_token").split(".");
     const truncatedTag = Buffer.from(tag, "base64url")
       .subarray(0, 15)
       .toString("base64url");

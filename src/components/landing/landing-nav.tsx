@@ -12,7 +12,11 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
   return (
     <header className="landing-nav-wrapper">
       <nav className="landing-nav" aria-label="Main Navigation">
-        <Link href="/" className="landing-brand-logo-link" aria-label="Grapplin home">
+        <Link
+          href="/"
+          className="landing-brand-logo-link"
+          aria-label="Grapplin home"
+        >
           <Image
             src="/grapplin-logo.png"
             alt="Grapplin"
@@ -46,7 +50,10 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
 
         <div className="landing-nav-actions">
           {isAuthenticated ? (
-            <Link href="/search" className="button button-accent landing-cta-btn">
+            <Link
+              href="/search"
+              className="button button-accent landing-cta-btn"
+            >
               <span>Open Grapplin</span>
               <ArrowRight size={16} />
             </Link>
@@ -56,7 +63,10 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
                 <LogIn size={15} />
                 <span>Sign in</span>
               </Link>
-              <Link href="/login" className="button button-primary landing-cta-btn">
+              <Link
+                href="/login"
+                className="button button-primary landing-cta-btn"
+              >
                 <span>Get Started</span>
                 <Sparkles size={15} />
               </Link>

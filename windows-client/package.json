@@ -1,0 +1,16 @@
+{
+  "name": "savesort-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SaveSort background sync client for Windows.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "test": "cargo test --workspace",
+    "lint": "cargo clippy --workspace --all-targets -- -D warnings"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.9.2"
+  }
+}

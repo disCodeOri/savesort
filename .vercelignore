@@ -1,0 +1,5 @@
+.handover/
+.worktrees/
+.next/
+node_modules/
+HANDOFF.md

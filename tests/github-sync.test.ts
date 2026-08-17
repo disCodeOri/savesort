@@ -32,7 +32,7 @@ vi.mock("@/lib/github/api", async (importOriginal) => {
 });
 
 import { GitHubApiError } from "@/lib/github/api";
-import { mapWithConcurrency } from "@/lib/github/concurrency";
+import { mapWithConcurrency } from "@/lib/async/concurrency";
 import {
   continueGitHubSync,
   GitHubSyncError,

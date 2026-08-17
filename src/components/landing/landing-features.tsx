@@ -28,7 +28,8 @@ const FEATURES: FeatureDetail[] = [
     id: "hybrid-search",
     badge: "Dual-Engine Retrieval",
     title: "Hybrid Search with Reciprocal Rank Fusion",
-    subtitle: "Why choose between keywords and AI when you can have both working in unison?",
+    subtitle:
+      "Why choose between keywords and AI when you can have both working in unison?",
     description:
       "Grapplin doesn't force a tradeoff between exact keyword precision and fuzzy semantic recall. It runs PostgreSQL full-text search and 768-dimension pgvector cosine distance simultaneously, fusing their rank orders with mathematical Reciprocal Rank Fusion (RRF).",
     highlights: [
@@ -73,7 +74,8 @@ const FEATURES: FeatureDetail[] = [
     id: "rls-privacy",
     badge: "Data Sovereignty",
     title: "PostgreSQL Row-Level Security & Encrypted Secrets",
-    subtitle: "Your bookmarks belong to you alone. No telemetry, no data sharing.",
+    subtitle:
+      "Your bookmarks belong to you alone. No telemetry, no data sharing.",
     description:
       "All saved items, notes, tags, and search vectors are isolated by PostgreSQL Row Level Security (RLS). Every query requires authenticated ownership (`auth.uid() = user_id`).",
     highlights: [
@@ -88,10 +90,15 @@ const FEATURES: FeatureDetail[] = [
 
 export function LandingFeatures() {
   const [activeTab, setActiveTab] = useState(FEATURES[0].id);
-  const currentFeature = FEATURES.find((f) => f.id === activeTab) || FEATURES[0];
+  const currentFeature =
+    FEATURES.find((f) => f.id === activeTab) || FEATURES[0];
 
   return (
-    <section className="landing-features-section" id="features" aria-labelledby="features-heading">
+    <section
+      className="landing-features-section"
+      id="features"
+      aria-labelledby="features-heading"
+    >
       <div className="section-header">
         <div className="landing-badge">
           <Sparkles size={13} />
@@ -107,7 +114,11 @@ export function LandingFeatures() {
       </div>
 
       {/* Feature Navigation Tabs */}
-      <div className="features-tab-nav" role="tablist" aria-label="Feature Tabs">
+      <div
+        className="features-tab-nav"
+        role="tablist"
+        aria-label="Feature Tabs"
+      >
         {FEATURES.map((feature) => (
           <button
             key={feature.id}
@@ -158,9 +169,13 @@ export function LandingFeatures() {
               </div>
               <div className="hybrid-pipeline-visual">
                 <div className="hybrid-branch-box branch-keyword">
-                  <span className="branch-title">PostgreSQL Full-Text (tsvector)</span>
+                  <span className="branch-title">
+                    PostgreSQL Full-Text (tsvector)
+                  </span>
                   <span className="branch-meta">Lexical Inverted Index</span>
-                  <div className="branch-score-pill">Rank #1: Score 1/61 = 0.0163</div>
+                  <div className="branch-score-pill">
+                    Rank #1: Score 1/61 = 0.0163
+                  </div>
                 </div>
 
                 <div className="hybrid-fuse-icon">
@@ -169,14 +184,20 @@ export function LandingFeatures() {
                 </div>
 
                 <div className="hybrid-branch-box branch-vector">
-                  <span className="branch-title">pgvector Cosine (768-dim)</span>
+                  <span className="branch-title">
+                    pgvector Cosine (768-dim)
+                  </span>
                   <span className="branch-meta">Gemini Semantic Distance</span>
-                  <div className="branch-score-pill">Rank #1: Score 1/61 = 0.0163</div>
+                  <div className="branch-score-pill">
+                    Rank #1: Score 1/61 = 0.0163
+                  </div>
                 </div>
               </div>
               <div className="hybrid-combined-result">
                 <span className="result-label">Fused Top Result:</span>
-                <span className="result-title">yt-dlp/yt-dlp (Composite RRF Score: 0.0327)</span>
+                <span className="result-title">
+                  yt-dlp/yt-dlp (Composite RRF Score: 0.0327)
+                </span>
               </div>
             </div>
           )}
@@ -189,15 +210,21 @@ export function LandingFeatures() {
               </div>
               <div className="sync-nodes-list">
                 <div className="sync-node">
-                  <div className="sync-node-icon"><KeyRound size={16} /></div>
+                  <div className="sync-node-icon">
+                    <KeyRound size={16} />
+                  </div>
                   <div className="sync-node-text">
                     <strong>PKCE State Authorization</strong>
-                    <span>Read-only starring scope • Encrypted AES-256 tokens</span>
+                    <span>
+                      Read-only starring scope • Encrypted AES-256 tokens
+                    </span>
                   </div>
                 </div>
                 <div className="sync-arrow">↓</div>
                 <div className="sync-node">
-                  <div className="sync-node-icon"><RefreshCw size={16} /></div>
+                  <div className="sync-node-icon">
+                    <RefreshCw size={16} />
+                  </div>
                   <div className="sync-node-text">
                     <strong>Atomic Page Leasing</strong>
                     <span>100 items/page • Heartbeat lease recovery</span>
@@ -205,10 +232,14 @@ export function LandingFeatures() {
                 </div>
                 <div className="sync-arrow">↓</div>
                 <div className="sync-node">
-                  <div className="sync-node-icon"><Database size={16} /></div>
+                  <div className="sync-node-icon">
+                    <Database size={16} />
+                  </div>
                   <div className="sync-node-text">
                     <strong>Non-Destructive Upsert</strong>
-                    <span>Preserves your custom notes, tags, and thumbnails</span>
+                    <span>
+                      Preserves your custom notes, tags, and thumbnails
+                    </span>
                   </div>
                 </div>
               </div>

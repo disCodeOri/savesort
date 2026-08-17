@@ -123,7 +123,11 @@ export function CinematicThoughtBanner() {
   }, []);
 
   return (
-    <section className="cinematic-banner-section" ref={bannerRef} aria-label="Start Grapplin flow">
+    <section
+      className="cinematic-banner-section"
+      ref={bannerRef}
+      aria-label="Start Grapplin flow"
+    >
       <div className="cinematic-banner-wrapper">
         {/* Background Image with Parallax & Cinematic Gradient */}
         <div className="cinematic-bg-container" ref={bgImageRef}>
@@ -192,12 +196,15 @@ export function CinematicThoughtBanner() {
           </h2>
 
           <p className="cinematic-subtext cinematic-fade-in">
-            Never lose a breakthrough link, open-source gem, or research article again.
-            Save in a keystroke, recall in a whisper.
+            Never lose a breakthrough link, open-source gem, or research article
+            again. Save in a keystroke, recall in a whisper.
           </p>
 
           <div className="cinematic-cta-row cinematic-fade-in">
-            <Link href="/login" className="button button-accent cinematic-primary-btn">
+            <Link
+              href="/login"
+              className="button button-accent cinematic-primary-btn"
+            >
               <span>Claim Your Private Library</span>
               <ArrowRight size={17} />
             </Link>

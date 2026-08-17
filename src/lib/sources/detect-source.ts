@@ -4,6 +4,7 @@ export const SOURCES = [
   "youtube",
   "reddit",
   "x",
+  "obsidian",
   "website",
   "other",
 ] as const;

@@ -78,8 +78,8 @@ describe("runGitHubSync", () => {
   it("stops after 1000 continuation responses", async () => {
     const fetchImpl = vi
       .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
-      .mockImplementation(async () =>
-        new Response(JSON.stringify(runningProgress)),
+      .mockImplementation(
+        async () => new Response(JSON.stringify(runningProgress)),
       );
 
     await expect(runGitHubSync(vi.fn(), fetchImpl)).rejects.toThrow(

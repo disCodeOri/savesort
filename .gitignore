@@ -19,3 +19,13 @@
 Thumbs.db
 *.swp
 node_modules
+.vercel
+
+# Generated Obsidian test vault fixture (regenerate via scripts/generate-obsidian-test-vault.ps1)
+/windows-client/fixtures/
+
+# Rust build output
+/windows-client/target/
+
+# Supabase CLI local state (holds a pooler connection string)
+/supabase/.temp/

@@ -11,7 +11,11 @@ export function LandingFooter() {
     <footer className="landing-footer">
       <div className="landing-footer-inner">
         <div className="footer-brand-col">
-          <Link href="/" className="landing-brand-logo-link" aria-label="Grapplin home">
+          <Link
+            href="/"
+            className="landing-brand-logo-link"
+            aria-label="Grapplin home"
+          >
             <Image
               src="/grapplin-logo.png"
               alt="Grapplin"
@@ -30,32 +34,60 @@ export function LandingFooter() {
           <div className="footer-col">
             <h4 className="footer-col-title">Navigation</h4>
             <ul className="footer-list">
-              <li><a href="#demo">Live Sandbox</a></li>
-              <li><a href="#pipeline-demo">Ingestion Pipeline</a></li>
-              <li><a href="#features">Core Features</a></li>
-              <li><a href="#how-it-works">How It Works</a></li>
-              <li><a href="#comparison">Comparison</a></li>
-              <li><a href="#faq">FAQ</a></li>
+              <li>
+                <a href="#demo">Live Sandbox</a>
+              </li>
+              <li>
+                <a href="#pipeline-demo">Ingestion Pipeline</a>
+              </li>
+              <li>
+                <a href="#features">Core Features</a>
+              </li>
+              <li>
+                <a href="#how-it-works">How It Works</a>
+              </li>
+              <li>
+                <a href="#comparison">Comparison</a>
+              </li>
+              <li>
+                <a href="#faq">FAQ</a>
+              </li>
             </ul>
           </div>
 
           <div className="footer-col">
             <h4 className="footer-col-title">Stack</h4>
             <ul className="footer-list">
-              <li><span>Next.js 16 App Router</span></li>
-              <li><span>Supabase PostgreSQL</span></li>
-              <li><span>pgvector Cosine Search</span></li>
-              <li><span>Gemini 768d Embeddings</span></li>
-              <li><span>GSAP Motion</span></li>
+              <li>
+                <span>Next.js 16 App Router</span>
+              </li>
+              <li>
+                <span>Supabase PostgreSQL</span>
+              </li>
+              <li>
+                <span>pgvector Cosine Search</span>
+              </li>
+              <li>
+                <span>Gemini 768d Embeddings</span>
+              </li>
+              <li>
+                <span>GSAP Motion</span>
+              </li>
             </ul>
           </div>
 
           <div className="footer-col">
             <h4 className="footer-col-title">Access</h4>
             <ul className="footer-list">
-              <li><Link href="/login">Sign In / Sign Up</Link></li>
-              <li><Link href="/search">Search Library</Link></li>
-              <li><Link href="/library">Manage Stars</Link></li>
+              <li>
+                <Link href="/login">Sign In / Sign Up</Link>
+              </li>
+              <li>
+                <Link href="/search">Search Library</Link>
+              </li>
+              <li>
+                <Link href="/library">Manage Stars</Link>
+              </li>
             </ul>
           </div>
         </div>
@@ -63,8 +95,8 @@ export function LandingFooter() {
 
       <div className="footer-bottom-bar">
         <p className="footer-copy">
-          © {new Date().getFullYear()} Grapplin. Built with precision, privacy, and
-          open standards.
+          © {new Date().getFullYear()} Grapplin. Built with precision, privacy,
+          and open standards.
         </p>
         <div className="footer-badges">
           <span className="footer-badge">

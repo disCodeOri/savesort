@@ -15,8 +15,7 @@ export type GitHubSyncProgress =
     };
 
 type GitHubSyncRequest =
-  | { action: "start" }
-  | { action: "continue"; syncId: string };
+  { action: "start" } | { action: "continue"; syncId: string };
 
 type FetchImplementation = (
   input: RequestInfo | URL,
@@ -24,7 +23,8 @@ type FetchImplementation = (
 ) => Promise<Response>;
 
 const MAX_CONTINUATION_RESPONSES = 1_000;
-const SAFE_SYNC_ERROR = "GitHub sync is temporarily unavailable. Try again later.";
+const SAFE_SYNC_ERROR =
+  "GitHub sync is temporarily unavailable. Try again later.";
 
 function isProgress(value: unknown): value is GitHubSyncProgress {
   if (!value || typeof value !== "object") return false;
@@ -40,7 +40,8 @@ function isProgress(value: unknown): value is GitHubSyncProgress {
 
   if (progress.status === "running") {
     return (
-      typeof progress.syncId === "string" && typeof progress.nextPage === "number"
+      typeof progress.syncId === "string" &&
+      typeof progress.nextPage === "number"
     );
   }
 

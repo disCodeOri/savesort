@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { embedDocument } from "@/lib/embeddings/gemini";
 import { GitHubApiError, listStarredRepositoriesPage } from "@/lib/github/api";
-import { mapWithConcurrency } from "@/lib/github/concurrency";
+import { mapWithConcurrency } from "@/lib/async/concurrency";
 import { getValidGitHubAccessToken } from "@/lib/github/connections";
 import {
   mapGitHubStar,

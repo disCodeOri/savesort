@@ -1,0 +1,23 @@
+[package]
+name = "savesort-core"
+version = "0.1.0"
+edition = "2021"
+description = "Filesystem-independent sync engine: storage, hashing, sync protocol types. No Tauri dependency, so it stays fast to compile and test in isolation."
+
+[dependencies]
+base64 = "0.22"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "1"
+time = { version = "0.3", features = ["formatting", "parsing", "serde", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"

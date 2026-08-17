@@ -10,7 +10,9 @@ interface Use3DTiltOptions {
   speed?: number;
 }
 
-export function use3DTilt<T extends HTMLElement>(options: Use3DTiltOptions = {}) {
+export function use3DTilt<T extends HTMLElement>(
+  options: Use3DTiltOptions = {},
+) {
   const ref = useRef<T>(null);
   const {
     maxTilt = 7,

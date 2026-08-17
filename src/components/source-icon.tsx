@@ -3,6 +3,7 @@ import {
   Code2,
   Globe2,
   MessageCircle,
+  NotebookPen,
   Package,
   Play,
 } from "lucide-react";
@@ -15,6 +16,7 @@ export const SOURCE_LABELS: Record<Source, string> = {
   youtube: "YouTube",
   reddit: "Reddit",
   x: "X",
+  obsidian: "Obsidian",
   website: "Web",
   other: "Other",
 };
@@ -30,6 +32,7 @@ export function SourceIcon({
   if (source === "instagram") return <Camera size={size} />;
   if (source === "youtube") return <Play size={size} fill="currentColor" />;
   if (source === "reddit") return <MessageCircle size={size} />;
+  if (source === "obsidian") return <NotebookPen size={size} />;
   if (source === "x")
     return (
       <span className="x-icon" style={{ fontSize: size }}>

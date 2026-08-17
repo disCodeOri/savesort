@@ -1,13 +1,13 @@
 "use client";
 
-import { Bookmark, LogOut, Menu, Plus, Search, X } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { signOutAction } from "@/app/auth/actions";
+import { DesktopSidebar } from "@/components/desktop/desktop-sidebar";
+import { DesktopTopNav } from "@/components/desktop/desktop-top-nav";
 import { GitHubAutoSync } from "@/components/github-auto-sync";
+import { MobileBottomNav } from "@/components/mobile/mobile-bottom-nav";
+import { MobileTopBar } from "@/components/mobile/mobile-top-bar";
+import { RedditAutoSync } from "@/components/reddit-auto-sync";
 import { SaveSheet } from "@/components/save-sheet";
 
 export function AppShell({
@@ -17,88 +17,42 @@ export function AppShell({
   children: React.ReactNode;
   email: string;
 }) {
-  const pathname = usePathname();
   const [saveOpen, setSaveOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="app-frame">
-      <header className="topbar">
-        <Link className="brand-logo-link" href="/search" aria-label="Grapplin home">
-          <Image
-            src="/grapplin-logo.png"
-            alt="Grapplin"
-            width={180}
-            height={90}
-            className="app-brand-logo"
-            priority
-          />
-        </Link>
-        <nav className="desktop-nav" aria-label="Primary navigation">
-          <Link
-            className={pathname === "/search" ? "active" : ""}
-            href="/search"
-          >
-            <Search size={18} /> Search
-          </Link>
-          <Link
-            className={pathname === "/library" ? "active" : ""}
-            href="/library"
-          >
-            <Bookmark size={18} /> Library
-          </Link>
-        </nav>
-        <div className="topbar-actions">
-          <button
-            className="button button-ink save-top"
-            onClick={() => setSaveOpen(true)}
-          >
-            Save something <Plus size={18} />
-          </button>
-          <button
-            className="menu-button"
-            aria-expanded={menuOpen}
-            aria-label="Open account menu"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          {menuOpen ? (
-            <div className="account-menu">
-              <span>{email}</span>
-              <form action={signOutAction}>
-                <button type="submit">
-                  <LogOut size={17} /> Log out
-                </button>
-              </form>
-            </div>
-          ) : null}
-        </div>
-      </header>
+    <div className="grapplin-app-root">
+      {/* 1. Desktop Top Navigation (Visible on Desktop >= 1024px) */}
+      <div className="desktop-nav-shell">
+        <DesktopTopNav email={email} onSaveClick={() => setSaveOpen(true)} />
+      </div>
+
+      {/* 2. Mobile Top Bar (Visible on Mobile <= 640px) */}
+      <div className="mobile-nav-shell">
+        <MobileTopBar email={email} />
+      </div>
 
       <GitHubAutoSync />
-      <div className="page-canvas">{children}</div>
+      <RedditAutoSync />
 
-      <button
-        className="mobile-save"
-        aria-label="Save something"
-        onClick={() => setSaveOpen(true)}
-      >
-        <Plus />
-      </button>
-      <nav className="mobile-nav" aria-label="Mobile navigation">
-        <Link className={pathname === "/search" ? "active" : ""} href="/search">
-          <Search />
-          <span>Search</span>
-        </Link>
-        <Link
-          className={pathname === "/library" ? "active" : ""}
-          href="/library"
-        >
-          <Bookmark />
-          <span>Library</span>
-        </Link>
-      </nav>
+      {/* 3. Main Workspace Layout (Sidebar + Main Application Area) */}
+      <div className="grapplin-workspace-layout">
+        {/* Desktop Left Sidebar */}
+        <div className="desktop-sidebar-shell">
+          <DesktopSidebar />
+        </div>
+
+        {/* Main Application Content */}
+        <main className="grapplin-main-workspace" id="main-content">
+          {children}
+        </main>
+      </div>
+
+      {/* 4. Mobile Floating Bottom Navigation Dock */}
+      <div className="mobile-dock-shell">
+        <MobileBottomNav onSaveClick={() => setSaveOpen(true)} />
+      </div>
+
+      {/* 5. Global Save Modal / Sheet */}
       <SaveSheet open={saveOpen} onClose={() => setSaveOpen(false)} />
     </div>
   );

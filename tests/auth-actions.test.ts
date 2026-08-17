@@ -53,7 +53,7 @@ describe("auth actions", () => {
         provider: "google",
         options: {
           redirectTo:
-            "http://localhost:3000/auth/callback?next=/search?githubSync=login",
+            "http://localhost:3000/auth/callback?next=%2Fsearch%3FgithubSync%3Dlogin%26redditSync%3Dlogin",
         },
       });
     });
@@ -84,7 +84,7 @@ describe("auth actions", () => {
       );
     });
 
-    it("redirects to search with githubSync=login on successful sign in", async () => {
+    it("redirects to search with a sync trigger for each provider", async () => {
       const signInWithPassword = vi.fn().mockResolvedValue({
         data: { session: {} },
         error: null,
@@ -98,7 +98,7 @@ describe("auth actions", () => {
       formData.set("password", "password123");
 
       await expect(signInAction(formData)).rejects.toThrow(
-        "REDIRECT:/search?githubSync=login",
+        "REDIRECT:/search?githubSync=login&redditSync=login",
       );
       expect(signInWithPassword).toHaveBeenCalledWith({
         email: "user@example.com",

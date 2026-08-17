@@ -31,7 +31,11 @@ export function LandingHowItWorks() {
   ];
 
   return (
-    <section className="landing-how-section" id="how-it-works" aria-labelledby="how-heading">
+    <section
+      className="landing-how-section"
+      id="how-it-works"
+      aria-labelledby="how-heading"
+    >
       <div className="section-header">
         <div className="landing-badge">
           <Sparkles size={13} />
@@ -41,8 +45,8 @@ export function LandingHowItWorks() {
           Three steps to an infallible second brain
         </h2>
         <p className="section-subtitle">
-          Designed with zero friction so you can focus on building, learning, and
-          collecting without organizational burnout.
+          Designed with zero friction so you can focus on building, learning,
+          and collecting without organizational burnout.
         </p>
       </div>
 

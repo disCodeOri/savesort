@@ -1,8 +1,8 @@
 import "server-only";
 
-import { createHash, timingSafeEqual } from "node:crypto";
-
 import type { NextResponse } from "next/server";
+
+import { isExpectedOAuthState } from "@/lib/crypto/secret-box";
 
 export const GITHUB_STATE_COOKIE = "savesort_github_state";
 export const GITHUB_PKCE_COOKIE = "savesort_github_pkce";
@@ -39,7 +39,5 @@ export function isExpectedGitHubState(
   receivedState: string,
   expectedState: string,
 ): boolean {
-  const receivedDigest = createHash("sha256").update(receivedState).digest();
-  const expectedDigest = createHash("sha256").update(expectedState).digest();
-  return timingSafeEqual(receivedDigest, expectedDigest);
+  return isExpectedOAuthState(receivedState, expectedState);
 }

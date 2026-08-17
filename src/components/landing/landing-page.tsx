@@ -77,7 +77,14 @@ export function LandingPage({ isAuthenticated }: LandingPageProps) {
         .fromTo(
           ".floating-satellite",
           { scale: 0.4, opacity: 0, z: 60 },
-          { scale: 1, opacity: 1, z: 60, stagger: 0.1, duration: 0.7, ease: "back.out(1.7)" },
+          {
+            scale: 1,
+            opacity: 1,
+            z: 60,
+            stagger: 0.1,
+            duration: 0.7,
+            ease: "back.out(1.7)",
+          },
           "-=0.5",
         );
 

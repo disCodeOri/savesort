@@ -31,3 +31,29 @@ export function getGitHubServerConfig(): GitHubServerConfig {
   }
   return config as GitHubServerConfig;
 }
+
+export interface RedditServerConfig {
+  clientId: string;
+  clientSecret: string;
+  encryptionKey: string;
+  supabaseSecretKey: string;
+  /**
+   * Reddit requires a unique, descriptive User-Agent on every Data API call, in
+   * the form `web:<app id>:<version> (by /u/<reddit username>)`.
+   */
+  userAgent: string;
+}
+
+export function getRedditServerConfig(): RedditServerConfig {
+  const config = {
+    clientId: process.env.REDDIT_APP_CLIENT_ID,
+    clientSecret: process.env.REDDIT_APP_CLIENT_SECRET,
+    encryptionKey: process.env.REDDIT_TOKEN_ENCRYPTION_KEY,
+    supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
+    userAgent: process.env.REDDIT_USER_AGENT,
+  };
+  if (Object.values(config).some((value) => !value)) {
+    throw new Error("Reddit connection is not configured.");
+  }
+  return config as RedditServerConfig;
+}

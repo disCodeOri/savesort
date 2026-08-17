@@ -10,6 +10,7 @@ SaveSort is a private, search-first MVP for saving internet resources and findin
 - `src/components/`: responsive product UI; preserve the editorial search-first design.
 - `src/lib/supabase/`: cookie-based browser/server clients and session proxy.
 - `src/lib/ingestion/`: safe website and GitHub enrichment. Never scrape restricted platforms.
+- `src/lib/github/`, `src/lib/reddit/`: OAuth account sync. Each provider owns its own encryption key and reads only the connected user's own data through their token.
 - `src/lib/embeddings/`: server-only Gemini embedding boundary at 768 dimensions.
 - `src/lib/search/`, `urls/`, `sources/`: deterministic, tested utilities.
 - `supabase/migrations/`: schema, indexes, RLS, and hybrid-search RPC.

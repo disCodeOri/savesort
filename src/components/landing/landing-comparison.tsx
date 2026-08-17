@@ -49,7 +49,11 @@ export function LandingComparison() {
   ];
 
   return (
-    <section className="landing-comparison-section" id="comparison" aria-labelledby="comparison-heading">
+    <section
+      className="landing-comparison-section"
+      id="comparison"
+      aria-labelledby="comparison-heading"
+    >
       <div className="section-header">
         <div className="landing-badge">
           <Sparkles size={13} />

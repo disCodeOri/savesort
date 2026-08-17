@@ -106,7 +106,11 @@ export function ScrollShowcase() {
   const currentStep = STEPS[activeStep];
 
   return (
-    <section className="scroll-showcase-section" ref={containerRef} aria-labelledby="showcase-heading">
+    <section
+      className="scroll-showcase-section"
+      ref={containerRef}
+      aria-labelledby="showcase-heading"
+    >
       <div className="showcase-inner-container">
         {/* Left Column: Vertical Scrollytelling Nav */}
         <div className="showcase-left-col">
@@ -141,7 +145,9 @@ export function ScrollShowcase() {
                 <Sparkles size={13} className="sparkle-accent" />
                 <span>Grapplin Neural Pipeline</span>
               </div>
-              <span className="mockup-step-tag">Step {activeStep + 1} of 3</span>
+              <span className="mockup-step-tag">
+                Step {activeStep + 1} of 3
+              </span>
             </div>
 
             {/* Visual Body based on Active Step */}
@@ -149,12 +155,18 @@ export function ScrollShowcase() {
               {activeStep === 0 && (
                 <div className="step-visual step-0-visual">
                   <div className="vague-query-box">
-                    <span className="query-meta-label">User Query (Messy Human Memory):</span>
+                    <span className="query-meta-label">
+                      User Query (Messy Human Memory):
+                    </span>
                     <div className="query-text-stream">
                       <Search size={16} className="query-search-icon" />
                       <span className="query-typing">
-                        &ldquo;that <mark className="hl-pink">fast rust cli tool</mark> for{" "}
-                        <mark className="hl-orange">downloading &amp; converting 4k audio/video</mark> I starred last month&rdquo;
+                        &ldquo;that{" "}
+                        <mark className="hl-pink">fast rust cli tool</mark> for{" "}
+                        <mark className="hl-orange">
+                          downloading &amp; converting 4k audio/video
+                        </mark>{" "}
+                        I starred last month&rdquo;
                       </span>
                     </div>
                   </div>
@@ -168,7 +180,9 @@ export function ScrollShowcase() {
                       <span className="bar bar-5" />
                       <span className="bar bar-6" />
                     </div>
-                    <span className="wave-text">768-dim Vector Projection Generating</span>
+                    <span className="wave-text">
+                      768-dim Vector Projection Generating
+                    </span>
                   </div>
 
                   <div className="floating-concept-tags">
@@ -190,8 +204,13 @@ export function ScrollShowcase() {
                         <span>PostgreSQL Inverted tsvector</span>
                       </div>
                       <div className="stream-calc">
-                        <code>SELECT ts_rank_cd(text_vector, &apos;cli &amp; download&apos;)</code>
-                        <span className="stream-score">Rank #1 (Score: 0.94)</span>
+                        <code>
+                          SELECT ts_rank_cd(text_vector, &apos;cli &amp;
+                          download&apos;)
+                        </code>
+                        <span className="stream-score">
+                          Rank #1 (Score: 0.94)
+                        </span>
                       </div>
                     </div>
 
@@ -212,15 +231,21 @@ export function ScrollShowcase() {
                         <span>pgvector 768-dim Cosine Distance</span>
                       </div>
                       <div className="stream-calc">
-                        <code>ORDER BY embedding &lt;=&gt; query_vector LIMIT 20</code>
-                        <span className="stream-score">Cosine: 0.982 (Distance: 0.018)</span>
+                        <code>
+                          ORDER BY embedding &lt;=&gt; query_vector LIMIT 20
+                        </code>
+                        <span className="stream-score">
+                          Cosine: 0.982 (Distance: 0.018)
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="fusion-result-banner">
                     <CheckCircle2 size={15} className="banner-check" />
-                    <span>RRF Fused Rank #1: Score 0.0327 • Confidence 99.4%</span>
+                    <span>
+                      RRF Fused Rank #1: Score 0.0327 • Confidence 99.4%
+                    </span>
                   </div>
                 </div>
               )}
@@ -241,8 +266,9 @@ export function ScrollShowcase() {
 
                     <h4 className="card-title">yt-dlp / yt-dlp</h4>
                     <p className="card-desc">
-                      A feature-rich command-line audio/video downloader with support for
-                      thousands of video sites, audio extraction, format conversion, and metadata embedding.
+                      A feature-rich command-line audio/video downloader with
+                      support for thousands of video sites, audio extraction,
+                      format conversion, and metadata embedding.
                     </p>
 
                     <div className="card-meta-row">
@@ -296,7 +322,10 @@ export function ScrollShowcase() {
             <p className="showcase-description">{currentStep.description}</p>
 
             <div className="showcase-action-box">
-              <a href="#demo" className="button button-secondary showcase-try-btn">
+              <a
+                href="#demo"
+                className="button button-secondary showcase-try-btn"
+              >
                 <span>Try In Sandbox Below</span>
                 <ArrowRight size={15} />
               </a>
