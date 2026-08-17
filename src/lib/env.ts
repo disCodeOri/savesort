@@ -12,6 +12,19 @@ export function getSupabasePublicConfig(): {
   return { url, publishableKey };
 }
 
+/**
+ * The server-side Supabase key on its own. Provider integrations each used to
+ * reach for this through their own config getter, which meant an unrelated
+ * missing variable (say a GitHub one) would break Reddit and Obsidian sync too.
+ */
+export function getSupabaseSecretKey(): string {
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("The Supabase server key is not configured.");
+  }
+  return secretKey;
+}
+
 export interface GitHubServerConfig {
   clientId: string;
   clientSecret: string;

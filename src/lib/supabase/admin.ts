@@ -2,12 +2,11 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 
-import { getGitHubServerConfig, getSupabasePublicConfig } from "@/lib/env";
+import { getSupabasePublicConfig, getSupabaseSecretKey } from "@/lib/env";
 
 export function createAdminClient() {
   const { url } = getSupabasePublicConfig();
-  const { supabaseSecretKey } = getGitHubServerConfig();
-  return createClient(url, supabaseSecretKey, {
+  return createClient(url, getSupabaseSecretKey(), {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

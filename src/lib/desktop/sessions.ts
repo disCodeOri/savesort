@@ -52,7 +52,17 @@ export async function createAuthorizationCode(
     device_name: deviceName,
     expires_at: expiresAt(AUTH_CODE_LIFETIME_MS),
   });
-  if (result.error) throw authError();
+  if (result.error) {
+    // The client only ever sees the opaque failure, but the operator needs the
+    // real cause: a missing table or a rejected constraint is invisible
+    // otherwise, and this call sits behind a browser redirect where there is
+    // nowhere else to look.
+    console.error("desktop authorization code insert failed", {
+      code: result.error.code,
+      message: result.error.message,
+    });
+    throw authError();
+  }
   return code;
 }
 
