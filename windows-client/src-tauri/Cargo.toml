@@ -10,7 +10,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 savesort-core = { path = "../core" }
 
-keyring = "3"
+# windows-native is required: without an explicit credential-store feature,
+# keyring 3.x silently falls back to an in-memory mock that does not persist,
+# so tokens vanish between calls and the app never appears signed in.
+keyring = { version = "3", features = ["windows-native"] }
 notify = "6"
 notify-debouncer-full = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
