@@ -146,6 +146,79 @@ Reddit requires a unique, descriptive `User-Agent` on every Data API request, so
 
 Reddit does not promise an unbounded saved archive through this endpoint. SaveSort pages until Reddit stops returning a cursor, so a very large saved history may import fewer items than the account shows.
 
+## X (Twitter) bookmarks
+
+SaveSort imports the signed-in user's own X bookmarks and turns them into
+ordinary saved items, so a half-remembered post is findable months later.
+
+```text
+Connect X  →  OAuth 2.0 + PKCE  →  GET /2/users/:id/bookmarks
+      →  paginate  →  saved_items  →  hybrid search
+```
+
+Bookmarks become `source = 'x'` saved items keyed on the canonical permalink
+`https://x.com/<username>/status/<id>`, so a repeated sync updates in place
+rather than duplicating.
+
+**Quoted posts are folded into the indexed body.** A bookmark whose entire text
+is "this is exactly right" is unsearchable alone; the quoted post arrives free
+as an expansion in the same response and carries the actual meaning.
+
+### Two things that are easy to get wrong
+
+**X exposes no "bookmarked at" time.** Only the post's own `created_at` is
+available, so `x_bookmarks.first_seen_at` records when GRAPPlin first observed
+the bookmark. It is never presented as a bookmark time.
+
+**Unbookmarking on X does not delete anything.** After a _complete_ traversal,
+bookmarks that vanished are marked inactive; the saved item, notes and tags all
+survive. Reconciliation runs only on the branch where pagination genuinely
+reached the end — a rate-limited, failed, or page-capped sync never reconciles,
+because unseen bookmarks are not removed bookmarks.
+
+### Setup
+
+Create an X app with **OAuth 2.0**, type **Web App (confidential client)**, and
+register the callback:
+
+```text
+http://localhost:3000/api/x/callback
+https://your-deployment/api/x/callback
+```
+
+Scopes requested are read-only: `tweet.read`, `users.read`, `bookmark.read`,
+`offline.access`. No write scope is ever requested.
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+```text
+X_CLIENT_ID=                  # OAuth 2.0 Client ID
+X_CLIENT_SECRET=              # OAuth 2.0 Client Secret, server-only
+X_TOKEN_ENCRYPTION_KEY=       # generated output, separate from the other keys
+```
+
+`TWITTER_*` is accepted as an alias for each. The OAuth 1.0a consumer key and
+secret, and the app-only bearer token, are deliberately **not** used: the
+bookmarks endpoint requires OAuth 2.0 user context, so those credentials cannot
+work here and storing them would only widen exposure.
+
+### Cost
+
+X bills **per post returned**, not per request. Syncing is therefore only ever
+triggered by an explicit user action — never on render, mount, or navigation.
+The cursor is persisted on rate limits and failures so a resumed sync never
+re-pays for pages that already landed, and both the server and the client cap
+total pages so a misbehaving cursor cannot bill in a loop.
+
+### Known upstream limitation
+
+X's bookmarks endpoint has a documented tendency to stop returning
+`meta.next_token` after a few pages. When that happens the sync ends cleanly and
+still reconciles, so a very large bookmark library may import in several passes
+rather than one.
+
 ## YouTube integration
 
 SaveSort imports videos from playlists the signed-in user chooses, then makes

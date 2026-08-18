@@ -45,6 +45,35 @@ export function getGitHubServerConfig(): GitHubServerConfig {
   return config as GitHubServerConfig;
 }
 
+export interface XServerConfig {
+  clientId: string;
+  clientSecret: string;
+  encryptionKey: string;
+}
+
+/**
+ * X credentials. `X_*` is the project convention, but `TWITTER_*` is accepted
+ * as an alias because that is how X's own developer console labels them.
+ *
+ * Only the OAuth 2.0 pair is used. The OAuth 1.0a consumer key/secret and the
+ * app-only bearer token cannot read a user's bookmarks — that endpoint
+ * requires OAuth 2.0 user context — so they are deliberately not read here.
+ */
+export function getXServerConfig(): XServerConfig {
+  const config = {
+    clientId: process.env.X_CLIENT_ID || process.env.TWITTER_CLIENT_ID,
+    clientSecret:
+      process.env.X_CLIENT_SECRET || process.env.TWITTER_CLIENT_SECRET,
+    encryptionKey:
+      process.env.X_TOKEN_ENCRYPTION_KEY ||
+      process.env.TWITTER_TOKEN_ENCRYPTION_KEY,
+  };
+  if (Object.values(config).some((value) => !value)) {
+    throw new Error("X connection is not configured.");
+  }
+  return config as XServerConfig;
+}
+
 export interface YouTubeServerConfig {
   clientId: string;
   clientSecret: string;

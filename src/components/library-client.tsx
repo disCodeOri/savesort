@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { GitHubConnectionPanel } from "@/components/github-connection-panel";
 import { RedditConnectionPanel } from "@/components/reddit-connection-panel";
+import { XConnectionPanel } from "@/components/x-connection-panel";
 import { YouTubeConnectionPanel } from "@/components/youtube-connection-panel";
 import { ItemDetailModal } from "@/components/item-detail-modal";
 import { MobileMemoryCard } from "@/components/mobile/mobile-memory-card";
@@ -122,6 +123,10 @@ export function LibraryClient() {
       />
 
       <YouTubeConnectionPanel
+        onLibraryChanged={() => setRevision((value) => value + 1)}
+      />
+
+      <XConnectionPanel
         onLibraryChanged={() => setRevision((value) => value + 1)}
       />
 
