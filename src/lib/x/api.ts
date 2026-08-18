@@ -32,7 +32,12 @@ const TIMEOUT_MS = 15_000;
 export const PAGE_SIZE = 100;
 
 export type XApiErrorKind =
-  "unauthorized" | "forbidden" | "rate_limited" | "provider_error";
+  | "unauthorized"
+  | "forbidden"
+  | "rate_limited"
+  /** X pay-per-use credits are exhausted. Retrying cannot help. */
+  | "payment_required"
+  | "provider_error";
 
 export class XApiError extends Error {
   constructor(
@@ -58,6 +63,9 @@ function messageForErrorKind(
   }
   if (kind === "rate_limited") {
     return "X has temporarily limited requests. Syncing can continue after the limit resets.";
+  }
+  if (kind === "payment_required") {
+    return "Your X API credits are exhausted. Add credits in the X Developer Portal to resume syncing.";
   }
   return "X is unavailable. Please try again later.";
 }
@@ -137,6 +145,11 @@ async function requestJson(
   }
   if (response.status === 401) {
     throw new XApiError("unauthorized", rateLimit);
+  }
+  // Pay-per-use credits exhausted. Distinct from 429: the limit does not reset
+  // on its own, so telling the user to "try again later" would be wrong.
+  if (response.status === 402) {
+    throw new XApiError("payment_required", rateLimit);
   }
   if (response.status === 403) {
     throw new XApiError(

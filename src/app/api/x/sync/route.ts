@@ -12,7 +12,13 @@ const syncRequestSchema = z.discriminatedUnion("action", [
 
 function syncErrorResponse(error: XSyncError) {
   const status =
-    error.kind === "conflict" ? 409 : error.kind === "forbidden" ? 403 : 503;
+    error.kind === "conflict"
+      ? 409
+      : error.kind === "forbidden"
+        ? 403
+        : error.kind === "payment_required"
+          ? 402
+          : 503;
   return apiError(error.message, status);
 }
 

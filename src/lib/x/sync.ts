@@ -71,7 +71,8 @@ export type XSyncProgress =
       deactivatedCount?: number;
     } & SyncCounts);
 
-export type XSyncErrorKind = "conflict" | "forbidden" | "unavailable";
+export type XSyncErrorKind =
+  "conflict" | "forbidden" | "payment_required" | "unavailable";
 
 export class XSyncError extends Error {
   constructor(
@@ -89,6 +90,9 @@ function messageForSyncError(kind: XSyncErrorKind): string {
   }
   if (kind === "forbidden") {
     return "X refused this request.";
+  }
+  if (kind === "payment_required") {
+    return "Your X API credits are exhausted. Add credits in the X Developer Portal to resume syncing.";
   }
   return "X sync is temporarily unavailable. Try again later.";
 }
@@ -276,6 +280,24 @@ async function handlePageError(
     return terminalProgress("rate_limited", connection, {
       rateLimitResetAt: resetAt,
     });
+  }
+
+  // Credits exhausted. The pagination cursor is preserved like a rate limit so
+  // topping up and syncing again resumes rather than re-paying for pages that
+  // already persisted — but the message must not suggest waiting, because the
+  // balance never recovers on its own.
+  if (error instanceof XApiError && error.kind === "payment_required") {
+    const message = error.message;
+    const cleaned = await cleanUpFailure(
+      client,
+      userId,
+      syncId,
+      page,
+      leaseId,
+      message.slice(0, 200),
+    );
+    if (!cleaned) throw new XSyncError("conflict");
+    throw new XSyncError("payment_required", message);
   }
 
   // A 403 usually means a missing scope or an access tier that cannot read
