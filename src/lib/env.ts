@@ -45,6 +45,32 @@ export function getGitHubServerConfig(): GitHubServerConfig {
   return config as GitHubServerConfig;
 }
 
+export interface YouTubeServerConfig {
+  clientId: string;
+  clientSecret: string;
+  encryptionKey: string;
+}
+
+export function getYouTubeServerConfig(): YouTubeServerConfig {
+  const config = {
+    clientId: process.env.YOUTUBE_CLIENT_ID,
+    clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
+    encryptionKey: process.env.YOUTUBE_TOKEN_ENCRYPTION_KEY,
+  };
+  if (Object.values(config).some((value) => !value)) {
+    throw new Error("YouTube connection is not configured.");
+  }
+  return config as YouTubeServerConfig;
+}
+
+/**
+ * The Gemini model used to analyse public YouTube videos. Overridable because
+ * multimodal model names move faster than this codebase does.
+ */
+export function getYouTubeAnalysisModel(): string {
+  return process.env.GEMINI_YOUTUBE_MODEL || "gemini-2.5-flash";
+}
+
 export interface RedditServerConfig {
   clientId: string;
   clientSecret: string;

@@ -1596,6 +1596,39 @@ textarea {
 .connection-panel-progress {
   margin-top: 10px;
 }
+.youtube-playlist-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.youtube-playlist-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.youtube-playlist-list label:hover {
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+}
+.youtube-playlist-list span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.youtube-playlist-list small {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
 .result-actions {
   align-self: center;
 }

@@ -146,6 +146,76 @@ Reddit requires a unique, descriptive `User-Agent` on every Data API request, so
 
 Reddit does not promise an unbounded saved archive through this endpoint. SaveSort pages until Reddit stops returning a cursor, so a very large saved history may import fewer items than the account shows.
 
+## YouTube integration
+
+SaveSort imports videos from playlists the signed-in user chooses, then makes
+them searchable by what the video is actually about rather than only its title.
+
+The pipeline runs in two stages, deliberately separated:
+
+```text
+YouTube playlist
+      ↓  playlistItems.list  (50 ids per call)
+video ids
+      ↓  videos.list         (batched, 50 per call)
+official metadata → saved_items      ← videos appear here immediately
+      ↓  Gemini analyses the public video URL
+description → searchable_text + embedding
+```
+
+Stage one is fast and cheap, so videos show up in the library right away.
+Stage two is slow and can fail per video, so it runs separately and never
+blocks the import. Only rows still marked `pending` are analysed, which is what
+makes a re-sync free: existing videos are not re-analysed and personal notes and
+tags are never touched.
+
+Gemini reads the **public video URL** directly. Nothing is downloaded, no
+transcript service is involved, and the YouTube OAuth token is never sent to
+Gemini.
+
+### YouTube account sync setup
+
+Create a Google Cloud project, enable **YouTube Data API v3**, and configure an
+OAuth client of type **Web application**. Add both callbacks you intend to use:
+
+```text
+http://localhost:3000/api/youtube/callback
+https://your-deployment/api/youtube/callback
+```
+
+Request only this scope — SaveSort never needs write access:
+
+```text
+https://www.googleapis.com/auth/youtube.readonly
+```
+
+While the OAuth app is in **Testing**, only accounts listed under
+_Audience → Test users_ can authorize it, and YouTube-scoped grants expire
+after seven days, so expect to reconnect roughly weekly during development.
+
+Generate a token-encryption key of its own and add the variables:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+```text
+YOUTUBE_CLIENT_ID=                # Google OAuth client ID
+YOUTUBE_CLIENT_SECRET=            # Google OAuth client secret, server-only
+YOUTUBE_TOKEN_ENCRYPTION_KEY=     # generated output, separate from the other keys
+GEMINI_YOUTUBE_MODEL=             # optional; overrides the default analysis model
+```
+
+The connect route requests `access_type=offline` with `prompt=consent`, because
+Google returns a refresh token only on first consent. A grant that comes back
+without one is rejected rather than saved, since it would expire within an hour.
+
+### Quota
+
+The importer uses `playlistItems.list` and a batched `videos.list` (50 ids per
+call) and never calls the expensive `search.list`, so a development playlist
+costs a negligible fraction of the default daily allocation.
+
 ## Obsidian vault sync
 
 The Windows desktop client in `windows-client/` mirrors a local Obsidian vault
@@ -219,6 +289,10 @@ REDDIT_APP_CLIENT_ID=               # required for Reddit account sync
 REDDIT_APP_CLIENT_SECRET=           # required for Reddit account sync, server-only
 REDDIT_TOKEN_ENCRYPTION_KEY=        # required for Reddit account sync, server-only
 REDDIT_USER_AGENT=                  # required for Reddit account sync
+YOUTUBE_CLIENT_ID=                  # required for YouTube playlist sync
+YOUTUBE_CLIENT_SECRET=              # required for YouTube playlist sync, server-only
+YOUTUBE_TOKEN_ENCRYPTION_KEY=       # required for YouTube playlist sync, server-only
+GEMINI_YOUTUBE_MODEL=               # optional; overrides the video analysis model
 SUPABASE_SECRET_KEY=                # required for GitHub and Reddit account sync, server-only
 ```
 
