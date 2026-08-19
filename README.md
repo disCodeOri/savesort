@@ -289,6 +289,73 @@ The importer uses `playlistItems.list` and a batched `videos.list` (50 ids per
 call) and never calls the expensive `search.list`, so a development playlist
 costs a negligible fraction of the default daily allocation.
 
+## X historical archive import
+
+A second, independent way to get X data into GRAPPlin, alongside the live API
+sync. The user downloads their archive ZIP from X and uploads it; no X API
+credentials are involved and the importer never calls the X API.
+
+### Where the work happens, and why
+
+The archive is read **in the browser**, not on the server. Two reasons:
+
+- **Privacy.** An X archive contains direct messages, contacts, IP and device
+  history, login records and ad-targeting data. Reading locally means those
+  files are never opened, never transmitted, and never reach an AI model.
+  Only allowlisted, content-bearing records leave the machine.
+- **Practicality.** Archives routinely run to hundreds of megabytes. Vercel
+  caps request bodies at 4.5 MB and serverless has no persistent disk, so a
+  server-side unzip would require an object-storage layer that does not exist
+  in this project.
+
+`.js` files in an archive are treated strictly as data: the assignment prefix
+is stripped textually and the payload goes through `JSON.parse`. Nothing is
+ever evaluated, imported, or injected — there are tests asserting exactly that.
+
+```text
+Archive ZIP (local)
+      ↓  allowlist + safety limits
+allowlisted datasets only
+      ↓  parse, normalize
+records
+      ↓  reconcile by post id
+unique content items
+      ↓  batched POST /api/x/archive/batch
+saved_items + x_post_relationships
+```
+
+### Content and relationships
+
+A post is one `saved_items` row. What the user _did_ with it lives separately
+in `x_post_relationships`, so a post that was liked, bookmarked and reposted is
+one item with three relationships rather than three copies.
+
+Identity is `x + post_id`, resolved to the canonical `https://x.com/…/status/…`
+permalink that `saved_items` already keys on — so a post arriving from both the
+archive and the API collapses onto a single row automatically, with provenance
+recorded for each source.
+
+### What is never done
+
+- **No fabrication.** When the archive supplies only a post id, the item is
+  stored `reference_only` with null text. Reference-only items are never
+  classified and never embedded — embedding a numeric id would produce a
+  confident vector for nothing.
+- **No overwriting.** Richer stored data is never replaced by a poorer archive
+  value, an existing embedding is never discarded, and user notes and tags are
+  never touched by an import.
+- **No timestamp invention.** `bookmarked_at` is used only when the archive
+  actually provides it. A post's creation time is never presented as when the
+  user saved it.
+
+### Repeat imports and revert
+
+Re-uploading the same archive is safe: content upserts on
+`(user_id, normalized_url)` and relationships on their primary key, so nothing
+duplicates. Removing an import deletes only the relationships that import
+created; content shared with the API sync or another import survives, as does
+anything the user annotated.
+
 ## Obsidian vault sync
 
 The Windows desktop client in `windows-client/` mirrors a local Obsidian vault

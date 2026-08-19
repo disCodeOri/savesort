@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { GitHubConnectionPanel } from "@/components/github-connection-panel";
 import { RedditConnectionPanel } from "@/components/reddit-connection-panel";
+import { XArchiveImportPanel } from "@/components/x-archive-import-panel";
 import { XConnectionPanel } from "@/components/x-connection-panel";
 import { YouTubeConnectionPanel } from "@/components/youtube-connection-panel";
 import { ItemDetailModal } from "@/components/item-detail-modal";
@@ -127,6 +128,11 @@ export function LibraryClient() {
       />
 
       <XConnectionPanel
+        onLibraryChanged={() => setRevision((value) => value + 1)}
+      />
+
+      {/* Sits beside Connect X: a second, independent way to bring in X data. */}
+      <XArchiveImportPanel
         onLibraryChanged={() => setRevision((value) => value + 1)}
       />
 
