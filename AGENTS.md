@@ -11,8 +11,11 @@ SaveSort is a private, search-first MVP for saving internet resources and findin
 - `src/lib/supabase/`: cookie-based browser/server clients and session proxy.
 - `src/lib/ingestion/`: safe website and GitHub enrichment. Never scrape restricted platforms.
 - `src/lib/github/`, `src/lib/reddit/`: OAuth account sync. Each provider owns its own encryption key and reads only the connected user's own data through their token.
+- `src/lib/data-import/`: Reddit and LinkedIn account-data export import. The uploaded export is the only source of platform content; it is parsed in the browser, never executed, and no platform API or page is ever fetched.
+- `src/lib/archive/`: entry path and decompression-bomb checks shared by every archive importer.
 - `src/lib/embeddings/`: server-only Gemini embedding boundary at 768 dimensions.
 - `src/lib/search/`, `urls/`, `sources/`: deterministic, tested utilities.
+- `src/lib/urls/analyze.ts`: what a URL reveals without being fetched — platform, content type, ids, author, slug-derived title, keywords. Never makes a request.
 - `supabase/migrations/`: schema, indexes, RLS, and hybrid-search RPC.
 - `tests/`: meaningful deterministic Vitest coverage.
 
@@ -51,7 +54,7 @@ npx supabase db push
 
 ## Scope guard
 
-Do not introduce LangChain, LlamaIndex, Redis, Elasticsearch, queues, microservices, Kubernetes, a Python backend, chat/RAG answers, folders, billing, admin tooling, analytics, or automatic restricted-platform scrapers. Add infrastructure only when a concrete approved requirement cannot work without it.
+Do not introduce LangChain, LlamaIndex, Redis, Elasticsearch, queues, microservices, Kubernetes, a Python backend, chat/RAG answers, folders, billing, admin tooling, analytics, or automatic restricted-platform scrapers. Instagram, X and LinkedIn are restricted sources: never fetch their pages, and never send one of their URLs to a model to ask what it contains. Add infrastructure only when a concrete approved requirement cannot work without it.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

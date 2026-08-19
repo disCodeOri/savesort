@@ -1,10 +1,20 @@
+import {
+  describeRejection as describeEntryRejection,
+  rejectEntryPathWith,
+  rejectEntrySizeWith,
+  type EntryRejection,
+} from "@/lib/archive/safety";
+
 /**
- * Guard rails for reading an untrusted archive.
+ * Guard rails for reading an untrusted X archive.
  *
  * The archive is read in the browser, so a malicious ZIP cannot write outside
  * a temp directory the way a server-side extract could. The remaining risks
  * are resource exhaustion and confusing the reader into reading the wrong
  * entry, which is what these limits and the path check address.
+ *
+ * The checks themselves live in `@/lib/archive/safety` so every importer runs
+ * the same traversal and bomb logic; only the numbers are X-specific.
  */
 
 export const ARCHIVE_LIMITS = {
@@ -23,60 +33,23 @@ export const ARCHIVE_LIMITS = {
   maxCandidateFiles: 2_000,
 } as const;
 
-export type EntryRejection =
-  | "path_traversal"
-  | "absolute_path"
-  | "path_too_long"
-  | "path_too_deep"
-  | "entry_too_large"
-  | "compression_ratio";
+export type { EntryRejection };
 
-/**
- * Validates an entry path before it is used for anything.
- *
- * Even reading in-browser, a `..` entry would let a crafted archive
- * impersonate a file from a directory we treat differently — for instance
- * escaping the privacy allowlist by nesting a DM export under a path that
- * looks like a likes file.
- */
 export function rejectEntryPath(path: string): EntryRejection | null {
-  if (path.length > ARCHIVE_LIMITS.maxPathLength) return "path_too_long";
-  // Backslashes are normalised first so a Windows-style traversal cannot slip
-  // past a forward-slash-only check.
-  const normalized = path.replace(/\\/g, "/");
-  if (normalized.startsWith("/")) return "absolute_path";
-  if (/^[A-Za-z]:/.test(normalized)) return "absolute_path";
-  const segments = normalized.split("/");
-  if (segments.includes("..")) return "path_traversal";
-  if (segments.length > ARCHIVE_LIMITS.maxPathDepth) return "path_too_deep";
-  return null;
+  return rejectEntryPathWith(path, ARCHIVE_LIMITS);
 }
 
 export function rejectEntrySize(
   compressedBytes: number,
   uncompressedBytes: number,
 ): EntryRejection | null {
-  if (uncompressedBytes > ARCHIVE_LIMITS.maxEntryBytes)
-    return "entry_too_large";
-  // A tiny compressed payload claiming a huge expansion is the classic bomb
-  // signature. Small files are exempt because their ratio is meaningless.
-  if (
-    compressedBytes > 1_024 &&
-    uncompressedBytes / compressedBytes > ARCHIVE_LIMITS.maxCompressionRatio
-  ) {
-    return "compression_ratio";
-  }
-  return null;
+  return rejectEntrySizeWith(
+    compressedBytes,
+    uncompressedBytes,
+    ARCHIVE_LIMITS,
+  );
 }
 
 export function describeRejection(rejection: EntryRejection): string {
-  if (rejection === "path_traversal" || rejection === "absolute_path") {
-    return "Skipped a file with an unsafe path.";
-  }
-  if (rejection === "path_too_long" || rejection === "path_too_deep") {
-    return "Skipped a file with an unexpected path.";
-  }
-  if (rejection === "entry_too_large")
-    return "Skipped a file that was too large.";
-  return "Skipped a file that expanded unexpectedly.";
+  return describeEntryRejection(rejection);
 }

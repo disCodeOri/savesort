@@ -11,6 +11,7 @@ const SOURCE_OPTIONS: Array<{ value: VisibleSource | null; label: string }> = [
   { value: "website", label: "Web" },
   { value: "youtube", label: "YouTube" },
   { value: "reddit", label: "Reddit" },
+  { value: "linkedin", label: "LinkedIn" },
   { value: "instagram", label: "Instagram" },
   { value: "other", label: "Other" },
 ];

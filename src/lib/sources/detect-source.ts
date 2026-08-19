@@ -4,6 +4,7 @@ export const SOURCES = [
   "youtube",
   "reddit",
   "x",
+  "linkedin",
   "obsidian",
   "website",
   "other",
@@ -15,12 +16,21 @@ function isHost(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
+/**
+ * Platforms whose pages GRAPPlin will never fetch.
+ *
+ * LinkedIn is here because its content reaches GRAPPlin only through a data
+ * export the user downloaded themselves. A LinkedIn URL arriving from an
+ * import — or pasted into the save form — must not cause the generic website
+ * enrichment pipeline to go and scrape the page.
+ */
 const RESTRICTED_PLATFORM_DOMAINS = [
   "instagram.com",
   "x.com",
   "twitter.com",
   "tiktok.com",
   "facebook.com",
+  "linkedin.com",
 ];
 
 export function isRestrictedPlatformUrl(input: string): boolean {
@@ -43,6 +53,7 @@ export function detectSource(input: string): Source {
     return "youtube";
   if (isHost(hostname, "reddit.com")) return "reddit";
   if (isHost(hostname, "x.com") || isHost(hostname, "twitter.com")) return "x";
+  if (isHost(hostname, "linkedin.com")) return "linkedin";
   return "website";
 }
 
@@ -68,4 +79,8 @@ export function parseGitHubRepositoryUrl(
   return { owner, repository };
 }
 
-export const RESTRICTED_SOURCES = new Set<Source>(["instagram", "x"]);
+export const RESTRICTED_SOURCES = new Set<Source>([
+  "instagram",
+  "x",
+  "linkedin",
+]);
