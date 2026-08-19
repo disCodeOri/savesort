@@ -1,4 +1,5 @@
 import {
+  Briefcase,
   Camera,
   Code2,
   Globe2,
@@ -16,6 +17,7 @@ export const SOURCE_LABELS: Record<Source, string> = {
   youtube: "YouTube",
   reddit: "Reddit",
   x: "X",
+  linkedin: "LinkedIn",
   obsidian: "Obsidian",
   website: "Web",
   other: "Other",
@@ -32,6 +34,7 @@ export function SourceIcon({
   if (source === "instagram") return <Camera size={size} />;
   if (source === "youtube") return <Play size={size} fill="currentColor" />;
   if (source === "reddit") return <MessageCircle size={size} />;
+  if (source === "linkedin") return <Briefcase size={size} />;
   if (source === "obsidian") return <NotebookPen size={size} />;
   if (source === "x")
     return (

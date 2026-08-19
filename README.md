@@ -414,6 +414,266 @@ Markdown only. Attachments are deliberately excluded from v1 — there is no
 object storage configured in this project yet, so binary sync would require
 introducing Supabase Storage first.
 
+## Reddit and LinkedIn data export import
+
+A third way to get content into GRAPPlin, alongside the live provider syncs.
+The user downloads their own account-data export from Reddit or LinkedIn and
+uploads it here. **No platform API is called and no platform page is ever
+fetched** — the uploaded export is the only source of platform content for this
+feature.
+
+### Where the work happens, and why
+
+The export is read **in the browser**, not on the server. Two reasons:
+
+- **Privacy.** A Reddit export contains private messages, chat history, IP
+  logs, linked identities and payment records. A LinkedIn export contains
+  connections, contacts, message history, login records, ad-targeting
+  inferences and the full profile. Reading locally means those files are never
+  opened, never transmitted and never reach an AI model. Only allowlisted,
+  content-bearing records leave the machine.
+- **Practicality.** Vercel caps request bodies at 4.5 MB and serverless has no
+  persistent disk, so a server-side unzip would need an object-storage layer
+  this project deliberately does not have.
+
+Nothing is executed. Files are parsed strictly as data — there is no `eval`, no
+script execution, and imported text is never rendered as HTML.
+
+```text
+Export ZIP or CSV (local)
+      ↓  allowlist + safety limits
+allowlisted datasets only
+      ↓  platform detection, parse, normalize
+records
+      ↓  reconcile by content key, cross-reference within the export
+unique items
+      ↓  batched POST /api/imports/batch
+saved_items + data_import_records
+      ↓  bounded POST /api/imports/classify passes
+classification, searchable_text, embedding
+```
+
+### Getting the export
+
+- **Reddit** — visit `reddit.com/settings/data-request` in a desktop browser,
+  sign in, request your full account history, and download the ZIP from the
+  link Reddit emails you.
+- **LinkedIn** — visit `linkedin.com/mypreferences/d/download-my-data`, pick
+  the larger archive if you want your posts and comments as well as saved
+  items, and download the ZIP when LinkedIn notifies you.
+
+GRAPPlin never performs either download for you.
+
+### What is recognised
+
+Filenames are a hint, never the contract. Every file is matched on its **column
+shape**, so a renamed, reordered or extra-columned file still imports, and a
+dataset either platform adds later is ignored safely rather than breaking the
+run.
+
+| Platform | Dataset                       | What it yields                                       |
+| -------- | ----------------------------- | ---------------------------------------------------- |
+| Reddit   | `saved_posts`                 | id + permalink only — this is all Reddit ships       |
+| Reddit   | `saved_comments`              | id + permalink only                                  |
+| Reddit   | `post_votes`, `comment_votes` | upvotes only; a downvote is not an interest signal   |
+| Reddit   | `posts`, `comments`           | the user's own title, body and dates                 |
+| LinkedIn | `Saved_Items`                 | URL + saved date only — this is all LinkedIn ships   |
+| LinkedIn | `Saved_Jobs`                  | job title, company, URL, saved date                  |
+| LinkedIn | `Reactions`                   | dated interaction, no text                           |
+| LinkedIn | `Shares`                      | the post's own text, publication date, external link |
+| LinkedIn | `Comments`                    | the user's own comment on someone else's post        |
+| LinkedIn | `Articles`                    | title and body                                       |
+
+Saved and bookmarked categories are ticked by default; activity history is
+opt-in, so importing does not sweep in an entire social-media history.
+
+### Within-export cross-referencing
+
+This is what makes a URL-only saved item findable. A LinkedIn Saved Item and a
+Reactions row name the same post through different URL shapes
+(`/feed/update/urn:li:activity:<id>` and `/posts/<handle>_<slug>-activity-<id>`),
+so reducing both to the activity id lets one file supply text, another supply
+the author, and a third supply a date — all from the same upload.
+
+Files the user did not select are still read locally and may add context to the
+items they did select; they never become items of their own. That behaviour is
+a checkbox in the panel and can be switched off.
+
+Records merge **only** on an equal content key, derived in this order:
+
+```text
+platform content id  →  provider permalink  →  canonical normalized URL
+```
+
+There is no fuzzy matching. Two posts with near-identical titles stay separate,
+because a wrong merge destroys content silently while a missed merge only
+leaves an item thinner than it could have been.
+
+### Content availability
+
+Every item is graded on what the export actually contained — a statement about
+the file, never a judgement about the content:
+
+- **full** — a substantial body (120+ characters of real text).
+- **partial** — something descriptive: a title, a short comment, a subreddit.
+- **reference_only** — a link, an id and a date, and nothing else.
+
+A LinkedIn saved item that arrives as a bare URL is `reference_only` because
+that is what LinkedIn shipped, and the UI says so rather than implying GRAPPlin
+malfunctioned.
+
+### Classification and embeddings
+
+Classification is retrieval enrichment, not a source of truth. Before any
+Gemini call, a deterministic gate requires at least 60 characters and 8 words of
+real text — a subreddit name and an author handle are labels, not something a
+model can summarise. Reference-only items are marked `insufficient_content` and
+cost nothing.
+
+Generated summary, topics, category, keywords and language are stored under
+`metadata.generated`, never written into the source columns and **never** added
+to the user's `tags`. The category comes from a small closed taxonomy; anything
+a model invents outside it becomes `Other`.
+
+Classification runs in bounded passes after the import, so items are visible and
+keyword-searchable before any AI work finishes. A classification or embedding
+failure leaves the item exactly as it was — keyword search keeps working.
+
+### Search
+
+Imported records are ordinary `saved_items` rows with `source = 'reddit'` or
+`source = 'linkedin'`. They use the same `searchable_text`, the same generated
+tsvector, the same 768-dimension Gemini embedding and the same
+`hybrid_search_saved_items`. There is no parallel index and no parallel search
+path.
+
+### What is never done
+
+- **No fetching.** GRAPPlin never visits reddit.com or linkedin.com for this
+  feature, never uses a headless browser, never asks a model what a URL
+  contains, and never inspects a cached preview. LinkedIn is registered as a
+  restricted platform, so the generic website enrichment pipeline will not
+  scrape a LinkedIn URL either.
+- **No fabrication.** When an export supplies only a link, the item is stored
+  `reference_only` with null content. A neutral display label like "Saved
+  LinkedIn item" fills the title so the card is not blank; it is excluded from
+  the search index and never shown to the classifier.
+- **No overwriting.** Richer stored data is never replaced by a poorer import,
+  an existing embedding is never discarded, and user notes and tags are never
+  touched.
+- **No timestamp invention.** A saved date, a creation date and an interaction
+  date are stored in separate fields. Reddit's export dates no save, so that
+  field stays null rather than borrowing the import time.
+
+### Repeat imports and revert
+
+Re-uploading the same export is safe. Identity is the content key stored in
+`data_import_records`, so a permalink written two different ways still resolves
+to one library row — and a post already synced from a connected Reddit account
+is enriched in place rather than duplicated. Removing an import deletes only the
+records it created; an item that also came from the connected account, or that
+carries a note or a manual tag, survives.
+
+The raw export is never uploaded and never stored. Only a SHA-256 fingerprint of
+the file is kept, purely to recognise a repeat upload.
+
+### Known limitations
+
+- A Reddit saved post or comment that no other file in the same export mentions
+  stays `reference_only` or `partial`: `saved_posts.csv` contains an id and a
+  permalink and nothing more.
+- A LinkedIn saved item whose post the user never reacted to, shared or
+  commented on stays `reference_only` for the same reason.
+- A future export schema that changes both its filenames _and_ its column
+  shapes beyond recognition will be ignored safely rather than mis-parsed.
+- Saved items pointing somewhere other than the platform itself are reported as
+  unresolved rather than imported under a guessed identity.
+
+## Getting the most out of a URL
+
+A saved link is frequently _all_ GRAPPlin gets — LinkedIn's export hands over a
+URL and a date, and Reddit's hands over a permalink and an id. `src/lib/urls/`
+treats that URL as data rather than an opaque string, because
+`reddit.com/r/rust/comments/abc123/why_async_is_hard` already names a platform,
+a community, a stable id and most of a title.
+
+Everything is derived from the URL string. **Nothing is fetched.** The same URL
+always produces the same analysis.
+
+`analyzeUrl(url)` returns:
+
+| Field                  | What it answers                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `platform`             | Which service, from a registry of ~18                                                                           |
+| `source`               | How that maps onto GRAPPlin's existing source union                                                             |
+| `contentType`          | post, comment, video, article, repository, issue, paper, job, profile, package, track, document, image, search… |
+| `contentId`            | The stable platform id, when the URL carries one                                                                |
+| `author` / `community` | Who wrote it and where it lives                                                                                 |
+| `titleFromSlug`        | Readable words decoded from the slug                                                                            |
+| `dateFromPath`         | A publication date embedded as `/2024/05/12/`                                                                   |
+| `descriptors`          | Everything else the pattern named: repo, issue number, playlist, start time                                     |
+| `keywords`             | Retrieval terms mined from the path                                                                             |
+| `restricted`           | Whether GRAPPlin must never fetch this URL                                                                      |
+| `confidence`           | `high` (has an id) → `medium` (title or author) → `low` → `none`                                                |
+
+### Why this matters for search
+
+A reference-only LinkedIn item used to be an unfindable row. Now its slug,
+community, content type and path keywords all reach `searchable_text`, so a
+vague query has something real to hit — with no AI call and no network request.
+
+### Ordinary websites are the common case
+
+Most saved links are not on a platform we have rules for, so the generic
+analyzer does the heavy lifting: it reads a date out of `/2024/05/12/`, decodes
+a title from a trailing slug, recognises `/blog/`, `/docs/`, `/careers/` and
+`/forum/` segments, classifies by file extension, and treats a trailing numeric
+segment as an id. `example.com/blog/2024/05/12/why-rust-wins-on-embedded`
+becomes an `article`, dated, titled "Why rust wins on embedded".
+
+`analyzeUrl` never throws. Unusable input returns a `none`-confidence result,
+because this runs over whole export files where one bad row must not stop the
+rest.
+
+## Reading an export whose schema we have never seen
+
+Platform exports change shape without warning. When a JSON file in an export
+matches no known column shape, `src/lib/data-import/json-records.ts` walks it
+anyway and works out what each field _is_ from its name, its value shape, and
+whether it parses as a URL.
+
+Two rules govern it:
+
+1. **Deny by default.** A field is only extracted if it earns a role — title,
+   text, url, author, community, date or id. Anything unrecognised is dropped,
+   not stored "just in case".
+2. **Privacy first.** Contact details, credentials, locations, payment and
+   device history are refused by key name _and_ by value shape, so a column
+   called `note` holding an email address is still refused. Key names are
+   tokenised (`viewerIp` → `viewer` + `ip`) so camelCase cannot smuggle a field
+   past the filter, and every refusal is reported rather than silent.
+
+Field roles are inferred, not configured:
+
+```text
+key name says "title"/"body"/"permalink"/"author"/"subreddit"  → that role
+value parses as an http(s) URL                                 → a link
+value looks like 2024-05-12, or the key mentions a date        → a timestamp
+a long free-text value under any name at all                   → content
+anything else                                                  → ignored
+```
+
+Recovered records are routed back through the **same** platform normalizers the
+recognised files use, so a record rescued from an unknown layout lands on
+exactly the same `saved_items` row as the same record arriving through a
+recognised CSV. Recovery does not get its own identity rules.
+
+A slug-decoded title is passed through with `titleSource: "permalink_slug"`
+rather than as a `title` column, so nothing downstream can claim the platform
+wrote words we decoded from a URL. Valid JSON that is simply not a dataset — a
+settings blob, a manifest — is skipped silently rather than reported as
+unreadable.
+
 ## Environment variables
 
 ```text
@@ -433,6 +693,7 @@ YOUTUBE_CLIENT_ID=                  # required for YouTube playlist sync
 YOUTUBE_CLIENT_SECRET=              # required for YouTube playlist sync, server-only
 YOUTUBE_TOKEN_ENCRYPTION_KEY=       # required for YouTube playlist sync, server-only
 GEMINI_YOUTUBE_MODEL=               # optional; overrides the video analysis model
+GEMINI_CLASSIFICATION_MODEL=        # optional; overrides the import classification model
 SUPABASE_SECRET_KEY=                # required for GitHub and Reddit account sync, server-only
 ```
 

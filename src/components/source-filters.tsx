@@ -12,6 +12,7 @@ const FILTERS: Array<{ value: VisibleSource | null; label: string }> = [
   { value: "instagram", label: "Instagram" },
   { value: "youtube", label: "YouTube" },
   { value: "reddit", label: "Reddit" },
+  { value: "linkedin", label: "LinkedIn" },
   { value: "other", label: "Other" },
 ];
 

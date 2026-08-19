@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { DataImportPanel } from "@/components/data-import-panel";
 import { EmptyState } from "@/components/empty-state";
 import { GitHubConnectionPanel } from "@/components/github-connection-panel";
 import { RedditConnectionPanel } from "@/components/reddit-connection-panel";
@@ -133,6 +134,11 @@ export function LibraryClient() {
 
       {/* Sits beside Connect X: a second, independent way to bring in X data. */}
       <XArchiveImportPanel
+        onLibraryChanged={() => setRevision((value) => value + 1)}
+      />
+
+      {/* Historical Reddit and LinkedIn exports the user downloaded themselves. */}
+      <DataImportPanel
         onLibraryChanged={() => setRevision((value) => value + 1)}
       />
 
