@@ -31,6 +31,8 @@ The application is one Next.js App Router project. Route Handlers do server-only
 
 If Gemini is unavailable, saving still works and PostgreSQL keyword search remains available.
 
+Inside the same hybrid-search RPC, a vague multi-word query that misses the strict keyword match falls back to an OR-of-terms keyword ranking before fusion, and vector search runs with a tuned `hnsw.ef_search` so per-user recall survives the user filter that follows the index scan.
+
 ## Tech stack
 
 - **Next.js 16 / React 19 / TypeScript** — application, server routes, and UI.

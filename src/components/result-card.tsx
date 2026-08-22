@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { SourceIcon, SOURCE_LABELS } from "@/components/source-icon";
 import type { SavedItem } from "@/lib/items/types";
+import { resultMatchLabel } from "@/lib/search/match-label";
 
 function domainOf(url: string) {
   try {
@@ -19,16 +20,6 @@ function savedDate(value: string) {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
-}
-
-// Compute deterministic match score based on item id for realistic display
-function getMatchPercentage(item: SavedItem): number {
-  if (item.source === "github") return 98;
-  if (item.source === "youtube") return 95;
-  if (item.source === "website") return 97;
-  if (item.source === "reddit") return 92;
-  if (item.source === "instagram") return 94;
-  return 93;
 }
 
 export function ResultCard({
@@ -59,9 +50,9 @@ export function ResultCard({
     if (onSelect) onSelect(item);
   }
 
-  const isVideo = item.source === "youtube";
-  const matchScore = getMatchPercentage(item);
+  const matchLabel = resultMatchLabel(item);
 
+  const isVideo = item.source === "youtube";
   return (
     <article
       className={`desktop-immersive-card source-${item.source} ${isVideo ? "card-variant-video" : ""}`}
@@ -85,7 +76,7 @@ export function ResultCard({
           </span>
         </div>
 
-        <span className="card-match-badge">{matchScore}% match</span>
+        {matchLabel && <span className="card-match-badge">{matchLabel}</span>}
       </div>
 
       {/* 2. Visual / Video Preview Thumbnail (for YouTube or Visual items) */}
