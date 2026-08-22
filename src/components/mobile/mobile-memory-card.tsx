@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { SourceIcon, SOURCE_LABELS } from "@/components/source-icon";
 import type { SavedItem } from "@/lib/items/types";
+import { resultMatchLabel } from "@/lib/search/match-label";
 
 function domainOf(url: string) {
   try {
@@ -12,14 +13,6 @@ function domainOf(url: string) {
   } catch {
     return url;
   }
-}
-
-function getMatchPercentage(item: SavedItem): number {
-  if (item.source === "github") return 99;
-  if (item.source === "youtube") return 96;
-  if (item.source === "website") return 97;
-  if (item.source === "reddit") return 92;
-  return 95;
 }
 
 export function MobileMemoryCard({
@@ -51,7 +44,7 @@ export function MobileMemoryCard({
   }
 
   const isVideo = item.source === "youtube";
-  const matchScore = getMatchPercentage(item);
+  const matchLabel = resultMatchLabel(item);
 
   return (
     <article
@@ -76,7 +69,9 @@ export function MobileMemoryCard({
           </span>
         </div>
 
-        <span className="mobile-memory-match-badge">{matchScore}% match</span>
+        {matchLabel && (
+          <span className="mobile-memory-match-badge">{matchLabel}</span>
+        )}
       </div>
 
       {/* 2. Main Content Layout (Side-by-side thumbnail if video) */}

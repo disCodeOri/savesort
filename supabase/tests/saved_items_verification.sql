@@ -31,6 +31,22 @@ begin
       and tablename = 'saved_items'
       and indexdef ilike '%using hnsw%'
   ), 'saved_items must have an HNSW vector index';
+
+  assert (
+    select prolang = (select oid from pg_language where lanname = 'plpgsql')
+      and provolatile = 's'
+      and prosecdef = false
+    from pg_proc
+    where oid = 'public.hybrid_search_saved_items(text,extensions.vector,text,integer)'::regprocedure
+  ), 'hybrid_search_saved_items must be a stable security-invoker plpgsql function';
+
+  assert (
+    select has_function_privilege(
+      'authenticated',
+      'public.hybrid_search_saved_items(text,extensions.vector,text,integer)',
+      'execute'
+    )
+  ), 'authenticated users must be able to execute hybrid_search_saved_items';
 end;
 $$;
 
@@ -42,3 +58,5 @@ rollback;
 -- 3. User A must receive zero rows when selecting/updating/deleting User B's UUID.
 -- 4. Exact title search should set keyword_rank; a paraphrase with a query vector should set semantic_rank.
 -- 5. Calling hybrid_search_saved_items with query_embedding => null must still return keyword matches.
+-- 6. A vague multi-word query whose strict AND-match finds nothing still returns keyword-ranked rows through the relaxed OR fallback.
+-- 7. A stopword-only query ("the of") returns no keyword crash and degrades cleanly to semantic or empty results.

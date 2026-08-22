@@ -56,10 +56,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       content: next.content,
     });
     const embedded = await embedDocument(searchableText);
+    // A transient embedding failure must never discard an existing vector;
+    // the item keeps its previous embedding and reports keyword_only until
+    // retry indexing re-embeds the edited text.
     const update = {
       ...parsed.data,
       searchable_text: searchableText,
-      embedding: embedded.embedding,
+      embedding: embedded.embedding ?? current.data.embedding ?? null,
       indexing_status: embedded.embedding ? "ready" : "keyword_only",
       indexing_error: embedded.error,
     };
