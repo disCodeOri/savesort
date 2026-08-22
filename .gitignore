@@ -32,3 +32,4 @@ node_modules
 
 # Supabase CLI local state
 supabase/.branches/
+.handover/
