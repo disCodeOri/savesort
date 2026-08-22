@@ -29,3 +29,6 @@ node_modules
 
 # Supabase CLI local state (holds a pooler connection string)
 /supabase/.temp/
+
+# Supabase CLI local state
+supabase/.branches/
