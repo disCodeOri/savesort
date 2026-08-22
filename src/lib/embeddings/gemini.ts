@@ -90,10 +90,26 @@ export async function createEmbedding(
     const embedding = normalizeVector(values);
     storeCachedEmbedding(cacheKey, embedding);
     return { embedding, error: null };
-  } catch {
+  } catch (error) {
+    // Vercel logs are the only place this is visible; keep it bounded and
+    // free of credentials while still saying WHY indexing degraded.
+    const status =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      typeof error.status === "number"
+        ? error.status
+        : undefined;
+    const detail = error instanceof Error ? error.message.slice(0, 200) : "";
+    console.error("gemini embedding failed", { taskType, status, detail });
     return {
       embedding: null,
-      error: "Semantic indexing is temporarily unavailable.",
+      error:
+        status === 403
+          ? "Semantic indexing key was rejected; replace the configured API key."
+          : status === 429
+            ? "Semantic indexing is rate limited; retry later."
+            : "Semantic indexing is temporarily unavailable.",
     };
   }
 }
@@ -101,7 +117,6 @@ export async function createEmbedding(
 export function embedDocument(text: string): Promise<EmbeddingResult> {
   return createEmbedding(text, "RETRIEVAL_DOCUMENT");
 }
-
 export function embedQuery(text: string): Promise<EmbeddingResult> {
   return createEmbedding(text, "RETRIEVAL_QUERY");
 }
